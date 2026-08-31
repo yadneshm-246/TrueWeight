@@ -5,6 +5,7 @@ const BACKEND_URL = "http://192.168.29.127:8000";
 
 function App() {
   const [page, setPage] = useState("role-select");
+
   const [selectedRole, setSelectedRole] = useState("");
 
   const [email, setEmail] = useState("");
@@ -20,12 +21,14 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   // =========================
-  // MERCHANT - INSTRUMENTS
+  // INSTRUMENTS
   // =========================
 
   const [instruments, setInstruments] = useState([]);
   const [instrumentsLoading, setInstrumentsLoading] = useState(false);
   const [instrumentsError, setInstrumentsError] = useState("");
+
+  const [showInstrumentForm, setShowInstrumentForm] = useState(false);
 
   const [instrumentForm, setInstrumentForm] = useState({
     unique_id: "",
@@ -38,26 +41,17 @@ function App() {
     purchase_date: "",
   });
 
-  const [instrumentCreating, setInstrumentCreating] = useState(false);
-  const [instrumentMessage, setInstrumentMessage] = useState("");
-
   // =========================
-  // MERCHANT - VERIFICATION
-  // =========================
-
-  const [myRequests, setMyRequests] = useState([]);
-  const [myRequestsLoading, setMyRequestsLoading] = useState(false);
-  const [myRequestsError, setMyRequestsError] = useState("");
-
-  const [requestLoading, setRequestLoading] = useState(null);
-
-  // =========================
-  // INSPECTOR
+  // VERIFICATION REQUESTS
   // =========================
 
   const [requests, setRequests] = useState([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [requestsError, setRequestsError] = useState("");
+
+  // =========================
+  // INSPECTION
+  // =========================
 
   const [selectedRequest, setSelectedRequest] = useState(null);
 
@@ -69,6 +63,28 @@ function App() {
   const [inspectionLoading, setInspectionLoading] = useState(false);
   const [inspectionError, setInspectionError] = useState("");
   const [inspectionResult, setInspectionResult] = useState(null);
+
+  // =========================
+  // CERTIFICATES
+  // =========================
+
+  const [certificateLoading, setCertificateLoading] = useState(false);
+  const [certificateError, setCertificateError] = useState("");
+  const [certificateResult, setCertificateResult] = useState(null);
+
+  const [merchantCertificates, setMerchantCertificates] = useState([]);
+  const [certificatesLoading, setCertificatesLoading] = useState(false);
+  const [certificatesError, setCertificatesError] = useState("");
+
+  // =========================
+  // PUBLIC CERTIFICATE
+  // =========================
+
+  const [verifyCertificateNumber, setVerifyCertificateNumber] =
+    useState("");
+  const [verifiedCertificate, setVerifiedCertificate] = useState(null);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
 
   // =========================
   // CHECK EXISTING LOGIN
@@ -163,7 +179,10 @@ function App() {
         throw new Error(data.detail || "Invalid email or password");
       }
 
-      localStorage.setItem("trueweight_token", data.access_token);
+      localStorage.setItem(
+        "trueweight_token",
+        data.access_token
+      );
 
       setToken(data.access_token);
 
@@ -190,18 +209,21 @@ function App() {
     setEmail("");
     setPassword("");
 
-    setInstruments([]);
-    setMyRequests([]);
     setRequests([]);
+    setInstruments([]);
+    setMerchantCertificates([]);
 
     closeInspection();
 
+    setCertificateResult(null);
+
     setSelectedRole("");
+
     setPage("role-select");
   };
 
   // =====================================================
-  // MERCHANT - LOAD INSTRUMENTS
+  // LOAD MERCHANT INSTRUMENTS
   // =====================================================
 
   const loadInstruments = async () => {
@@ -227,7 +249,7 @@ function App() {
 
       setInstruments(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error("Instrument loading error:", error);
+      console.error("Instrument error:", error);
 
       setInstrumentsError(
         error.message || "Failed to load instruments"
@@ -238,7 +260,7 @@ function App() {
   };
 
   // =====================================================
-  // MERCHANT - CREATE INSTRUMENT
+  // CREATE INSTRUMENT
   // =====================================================
 
   const createInstrument = async () => {
@@ -254,42 +276,24 @@ function App() {
 
     for (const field of requiredFields) {
       if (!instrumentForm[field].trim()) {
-        setInstrumentMessage(
+        setInstrumentsError(
           `Please enter ${field.replaceAll("_", " ")}.`
         );
         return;
       }
     }
 
-    setInstrumentCreating(true);
-    setInstrumentMessage("");
+    setInstrumentsLoading(true);
+    setInstrumentsError("");
 
     try {
       const params = new URLSearchParams();
 
-      params.append("unique_id", instrumentForm.unique_id.trim());
-      params.append(
-        "instrument_type",
-        instrumentForm.instrument_type.trim()
-      );
-      params.append(
-        "manufacturer",
-        instrumentForm.manufacturer.trim()
-      );
-      params.append("model", instrumentForm.model.trim());
-      params.append(
-        "serial_number",
-        instrumentForm.serial_number.trim()
-      );
-      params.append("capacity", instrumentForm.capacity.trim());
-      params.append("location", instrumentForm.location.trim());
-
-      if (instrumentForm.purchase_date) {
-        params.append(
-          "purchase_date",
-          instrumentForm.purchase_date
-        );
-      }
+      Object.entries(instrumentForm).forEach(([key, value]) => {
+        if (value.trim()) {
+          params.append(key, value.trim());
+        }
+      });
 
       const response = await fetch(
         `${BACKEND_URL}/instruments/?${params.toString()}`,
@@ -309,10 +313,6 @@ function App() {
         );
       }
 
-      setInstrumentMessage(
-        "✅ Instrument registered successfully."
-      );
-
       setInstrumentForm({
         unique_id: "",
         instrument_type: "",
@@ -324,70 +324,28 @@ function App() {
         purchase_date: "",
       });
 
+      setShowInstrumentForm(false);
+
       await loadInstruments();
     } catch (error) {
       console.error("Create instrument error:", error);
 
-      setInstrumentMessage(
-        `❌ ${error.message || "Failed to register instrument"}`
+      setInstrumentsError(
+        error.message || "Failed to create instrument"
       );
     } finally {
-      setInstrumentCreating(false);
+      setInstrumentsLoading(false);
     }
   };
 
   // =====================================================
-  // MERCHANT - LOAD MY VERIFICATION REQUESTS
-  // =====================================================
-
-  const loadMyRequests = async () => {
-    if (!token) return;
-
-    setMyRequestsLoading(true);
-    setMyRequestsError("");
-
-    try {
-      const response = await fetch(`${BACKEND_URL}/verification/my`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail || "Failed to load verification requests"
-        );
-      }
-
-      setMyRequests(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("My requests error:", error);
-
-      setMyRequestsError(
-        error.message || "Failed to load verification requests"
-      );
-    } finally {
-      setMyRequestsLoading(false);
-    }
-  };
-
-  // =====================================================
-  // MERCHANT - REQUEST VERIFICATION
+  // CREATE VERIFICATION REQUEST
   // =====================================================
 
   const requestVerification = async (instrumentId) => {
-    setRequestLoading(instrumentId);
-    setMyRequestsError("");
-
     try {
-      const params = new URLSearchParams();
-
-      params.append("instrument_id", instrumentId);
-
       const response = await fetch(
-        `${BACKEND_URL}/verification/request?${params.toString()}`,
+        `${BACKEND_URL}/verification/request?instrument_id=${instrumentId}`,
         {
           method: "POST",
           headers: {
@@ -408,35 +366,58 @@ function App() {
         `Verification request created!\nApplication ID: ${data.application_id}`
       );
 
-      await loadMyRequests();
+      await loadInstruments();
     } catch (error) {
       console.error("Verification request error:", error);
 
       alert(
         error.message || "Failed to create verification request"
       );
-    } finally {
-      setRequestLoading(null);
     }
   };
 
   // =====================================================
-  // MERCHANT DATA LOAD
+  // LOAD MY VERIFICATION REQUESTS
   // =====================================================
 
-  useEffect(() => {
-    if (
-      page === "merchant-dashboard" &&
-      token &&
-      user?.role === "SHOPKEEPER"
-    ) {
-      loadInstruments();
-      loadMyRequests();
+  const loadMyRequests = async () => {
+    if (!token) return;
+
+    setRequestsLoading(true);
+    setRequestsError("");
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/verification/my`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Failed to load requests"
+        );
+      }
+
+      setRequests(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("My requests error:", error);
+
+      setRequestsError(
+        error.message || "Failed to load requests"
+      );
+    } finally {
+      setRequestsLoading(false);
     }
-  }, [page, token, user]);
+  };
 
   // =====================================================
-  // INSPECTOR - LOAD REQUESTS
+  // LOAD INSPECTOR REQUESTS
   // =====================================================
 
   const loadRequests = async () => {
@@ -449,11 +430,14 @@ function App() {
     setRequestsError("");
 
     try {
-      const response = await fetch(`${BACKEND_URL}/verification/`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${BACKEND_URL}/verification/`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       const data = await response.json();
 
@@ -464,7 +448,9 @@ function App() {
         );
       }
 
-      setRequests(Array.isArray(data) ? data : []);
+      setRequests(
+        Array.isArray(data) ? data : []
+      );
     } catch (error) {
       console.error(
         "Verification requests error:",
@@ -481,7 +467,7 @@ function App() {
   };
 
   // =====================================================
-  // INSPECTOR REQUEST LOAD
+  // LOAD REQUESTS WHEN DASHBOARD OPENS
   // =====================================================
 
   useEffect(() => {
@@ -491,6 +477,16 @@ function App() {
       user?.role === "INSPECTOR"
     ) {
       loadRequests();
+    }
+
+    if (
+      page === "merchant-dashboard" &&
+      token &&
+      user?.role === "SHOPKEEPER"
+    ) {
+      loadInstruments();
+      loadMyRequests();
+      loadMerchantCertificates();
     }
   }, [page, token, user]);
 
@@ -508,6 +504,9 @@ function App() {
 
     setInspectionError("");
     setInspectionResult(null);
+
+    setCertificateResult(null);
+    setCertificateError("");
 
     window.scrollTo({
       top: 0,
@@ -529,6 +528,9 @@ function App() {
 
     setInspectionError("");
     setInspectionResult(null);
+
+    setCertificateResult(null);
+    setCertificateError("");
   };
 
   // =====================================================
@@ -583,6 +585,7 @@ function App() {
     setInspectionLoading(true);
     setInspectionError("");
     setInspectionResult(null);
+    setCertificateResult(null);
 
     try {
       const params = new URLSearchParams();
@@ -592,12 +595,26 @@ function App() {
         selectedRequest.request_id
       );
 
-      params.append("standard_weight", standard);
-      params.append("machine_reading", reading);
-      params.append("permissible_error", permissible);
+      params.append(
+        "standard_weight",
+        standard
+      );
+
+      params.append(
+        "machine_reading",
+        reading
+      );
+
+      params.append(
+        "permissible_error",
+        permissible
+      );
 
       if (remarks.trim()) {
-        params.append("remarks", remarks.trim());
+        params.append(
+          "remarks",
+          remarks.trim()
+        );
       }
 
       const response = await fetch(
@@ -638,6 +655,371 @@ function App() {
   };
 
   // =====================================================
+  // GENERATE CERTIFICATE
+  // =====================================================
+
+  const generateCertificate = async () => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    if (
+      !inspectionResult ||
+      inspectionResult.result !== "PASS"
+    ) {
+      setCertificateError(
+        "Certificate can only be generated after a PASS inspection."
+      );
+      return;
+    }
+
+    setCertificateLoading(true);
+    setCertificateError("");
+    setCertificateResult(null);
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/certificate/?verification_request_id=${selectedRequest.request_id}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Failed to generate certificate"
+        );
+      }
+
+      setCertificateResult(data);
+
+      await loadRequests();
+    } catch (error) {
+      console.error(
+        "Certificate generation error:",
+        error
+      );
+
+      setCertificateError(
+        error.message ||
+          "Failed to generate certificate"
+      );
+    } finally {
+      setCertificateLoading(false);
+    }
+  };
+
+  // =====================================================
+  // DOWNLOAD CERTIFICATE
+  // =====================================================
+
+  const downloadCertificate = (certificateNumber) => {
+    const url =
+      `${BACKEND_URL}/certificate/` +
+      `${certificateNumber}/pdf`;
+
+    window.open(url, "_blank");
+  };
+
+  // =====================================================
+  // LOAD MERCHANT CERTIFICATES
+  // =====================================================
+
+  const loadMerchantCertificates = async () => {
+    if (!token) return;
+
+    setCertificatesLoading(true);
+    setCertificatesError("");
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/certificate/my`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Failed to load certificates"
+        );
+      }
+
+      setMerchantCertificates(
+        Array.isArray(data) ? data : []
+      );
+    } catch (error) {
+      console.error(
+        "Certificates error:",
+        error
+      );
+
+      setCertificatesError(
+        error.message ||
+          "Failed to load certificates"
+      );
+    } finally {
+      setCertificatesLoading(false);
+    }
+  };
+
+  // =====================================================
+  // VERIFY PUBLIC CERTIFICATE
+  // =====================================================
+
+  const verifyCertificate = async () => {
+    if (!verifyCertificateNumber.trim()) {
+      setVerifyError(
+        "Please enter a certificate number."
+      );
+      return;
+    }
+
+    setVerifyLoading(true);
+    setVerifyError("");
+    setVerifiedCertificate(null);
+
+    try {
+      const certificateNumber =
+        verifyCertificateNumber.trim();
+
+      const response = await fetch(
+        `${BACKEND_URL}/certificate/verify/${encodeURIComponent(
+          certificateNumber
+        )}`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Certificate not found"
+        );
+      }
+
+      setVerifiedCertificate(data);
+    } catch (error) {
+      console.error(
+        "Certificate verification error:",
+        error
+      );
+
+      setVerifyError(
+        error.message ||
+          "Certificate verification failed"
+      );
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+  // =====================================================
+  // PUBLIC VERIFY PAGE
+  // =====================================================
+
+  if (window.location.pathname.startsWith("/verify/")) {
+    const certificateNumber =
+      decodeURIComponent(
+        window.location.pathname.split("/verify/")[1] || ""
+      );
+
+    if (
+      certificateNumber &&
+      verifyCertificateNumber !== certificateNumber
+    ) {
+      setVerifyCertificateNumber(certificateNumber);
+    }
+
+    return (
+      <div className="app">
+        <header className="navbar">
+          <div className="logo">
+            TRUE<span>WEIGHT</span>
+          </div>
+
+          <div className="nav-status">
+            Certificate Verification
+          </div>
+        </header>
+
+        <main className="container">
+          <section className="hero">
+            <div className="badge">
+              🔐 CERTIFICATE VERIFICATION
+            </div>
+
+            <h1>
+              Verify TrueWeight Certificate
+            </h1>
+
+            <p>
+              Check whether a TrueWeight verification
+              certificate is valid.
+            </p>
+          </section>
+
+          <section className="verify-card">
+            <h2>
+              Certificate Verification
+            </h2>
+
+            <p className="card-description">
+              Enter the certificate number printed
+              on the certificate.
+            </p>
+
+            <div className="form-group">
+              <label>
+                Certificate Number
+              </label>
+
+              <input
+                type="text"
+                placeholder="Example: TW-CERT-XXXXXXXX"
+                value={verifyCertificateNumber}
+                onChange={(e) =>
+                  setVerifyCertificateNumber(
+                    e.target.value.toUpperCase()
+                  )
+                }
+              />
+            </div>
+
+            {verifyError && (
+              <div className="error-box">
+                ❌ {verifyError}
+              </div>
+            )}
+
+            <button
+              className="login-button"
+              onClick={verifyCertificate}
+              disabled={verifyLoading}
+            >
+              {verifyLoading
+                ? "Verifying..."
+                : "🔍 Verify Certificate"}
+            </button>
+
+            {verifiedCertificate && (
+              <div className="result-card">
+                <div className="verified-icon">
+                  ✓
+                </div>
+
+                <h2>
+                  Certificate is Valid
+                </h2>
+
+                <p className="verified-text">
+                  This certificate has been successfully
+                  verified by TrueWeight.
+                </p>
+
+                <div className="details">
+                  <div className="detail-row">
+                    <span>
+                      Certificate Number
+                    </span>
+
+                    <strong>
+                      {
+                        verifiedCertificate.certificate_number
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Certificate ID
+                    </span>
+
+                    <strong>
+                      {
+                        verifiedCertificate.certificate_id
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Verification Request
+                    </span>
+
+                    <strong>
+                      {
+                        verifiedCertificate.verification_request_id
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Status
+                    </span>
+
+                    <strong className="valid">
+                      {verifiedCertificate.status}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Issued At
+                    </span>
+
+                    <strong>
+                      {
+                        verifiedCertificate.issued_at
+                          ? new Date(
+                              verifiedCertificate.issued_at
+                            ).toLocaleString()
+                          : "N/A"
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Valid Until
+                    </span>
+
+                    <strong>
+                      {
+                        verifiedCertificate.valid_until ||
+                        "No expiry specified"
+                      }
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="security-message">
+                  🛡️ Authentic TrueWeight certificate.
+                </div>
+              </div>
+            )}
+          </section>
+        </main>
+
+        <footer>
+          © 2026 TrueWeight Verification Platform
+        </footer>
+      </div>
+    );
+  }
+
+  // =====================================================
   // ROLE SELECT PAGE
   // =====================================================
 
@@ -673,7 +1055,9 @@ function App() {
           </section>
 
           <section className="role-selection">
-            <h2>Choose Login</h2>
+            <h2>
+              Choose Login
+            </h2>
 
             <p className="card-description">
               Select your account type to continue.
@@ -695,9 +1079,8 @@ function App() {
                 </h3>
 
                 <p>
-                  Register your weighing
-                  instruments and request
-                  verification.
+                  Register your weighing instruments
+                  and request verification.
                 </p>
 
                 <span>
@@ -895,12 +1278,14 @@ function App() {
             </h1>
 
             <p>
-              Manage your weighing instruments
-              and verification requests.
+              Manage weighing instruments,
+              verification requests and certificates.
             </p>
           </section>
 
-          {/* ACCOUNT INFORMATION */}
+          {/* =========================
+              MERCHANT INFORMATION
+          ========================= */}
 
           <section className="verify-card">
             <h2>
@@ -914,28 +1299,40 @@ function App() {
 
             <div className="details">
               <div className="detail-row">
-                <span>User ID</span>
+                <span>
+                  User ID
+                </span>
+
                 <strong>
                   {user?.id || "N/A"}
                 </strong>
               </div>
 
               <div className="detail-row">
-                <span>Name</span>
+                <span>
+                  Name
+                </span>
+
                 <strong>
                   {user?.name || "N/A"}
                 </strong>
               </div>
 
               <div className="detail-row">
-                <span>Email</span>
+                <span>
+                  Email
+                </span>
+
                 <strong>
                   {user?.email || "N/A"}
                 </strong>
               </div>
 
               <div className="detail-row">
-                <span>Role</span>
+                <span>
+                  Role
+                </span>
+
                 <strong className="valid">
                   {user?.role || "SHOPKEEPER"}
                 </strong>
@@ -943,171 +1340,9 @@ function App() {
             </div>
           </section>
 
-          {/* REGISTER INSTRUMENT */}
-
-          <section className="verify-card">
-            <h2>
-              ⚖️ Register Weighing Instrument
-            </h2>
-
-            <p className="card-description">
-              Add your weighing instrument to
-              the TrueWeight platform.
-            </p>
-
-            <div className="form-group">
-              <label>
-                Unique ID *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Example: TW-WM-001"
-                value={instrumentForm.unique_id}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    unique_id: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Instrument Type *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Example: Digital Weighing Machine"
-                value={instrumentForm.instrument_type}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    instrument_type: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Manufacturer *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Example: ABC Instruments"
-                value={instrumentForm.manufacturer}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    manufacturer: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Model *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Example: ABC-100"
-                value={instrumentForm.model}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    model: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Serial Number *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Enter serial number"
-                value={instrumentForm.serial_number}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    serial_number: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Capacity *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Example: 30 kg"
-                value={instrumentForm.capacity}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    capacity: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Location *
-              </label>
-
-              <input
-                type="text"
-                placeholder="Example: Shop Floor"
-                value={instrumentForm.location}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    location: e.target.value,
-                  })
-                }
-              />
-
-              <label>
-                Purchase Date
-              </label>
-
-              <input
-                type="date"
-                value={instrumentForm.purchase_date}
-                onChange={(e) =>
-                  setInstrumentForm({
-                    ...instrumentForm,
-                    purchase_date: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {instrumentMessage && (
-              <div
-                className={
-                  instrumentMessage.startsWith("❌")
-                    ? "error-box"
-                    : "security-message"
-                }
-              >
-                {instrumentMessage}
-              </div>
-            )}
-
-            <button
-              className="login-button"
-              onClick={createInstrument}
-              disabled={instrumentCreating}
-            >
-              {instrumentCreating
-                ? "Registering Instrument..."
-                : "➕ Register Instrument"}
-            </button>
-          </section>
-
-          {/* MY INSTRUMENTS */}
+          {/* =========================
+              INSTRUMENTS
+          ========================= */}
 
           <section className="verify-card">
             <div className="inspection-header">
@@ -1117,29 +1352,173 @@ function App() {
                 </h2>
 
                 <p className="card-description">
-                  Instruments registered under
-                  your merchant account.
+                  Register and manage your weighing
+                  instruments.
                 </p>
               </div>
 
               <button
-                className="secondary-button"
-                onClick={loadInstruments}
-                disabled={instrumentsLoading}
+                className="login-button"
+                onClick={() =>
+                  setShowInstrumentForm(
+                    !showInstrumentForm
+                  )
+                }
               >
-                🔄 Refresh
+                {showInstrumentForm
+                  ? "✕ Close"
+                  : "＋ Add Instrument"}
               </button>
             </div>
+
+            {showInstrumentForm && (
+              <div className="form-group">
+                <label>
+                  Unique ID
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Example: TW-SCALE-001"
+                  value={instrumentForm.unique_id}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      unique_id: e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Instrument Type
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Example: Digital Weighing Scale"
+                  value={instrumentForm.instrument_type}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      instrument_type:
+                        e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Manufacturer
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Manufacturer"
+                  value={instrumentForm.manufacturer}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      manufacturer:
+                        e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Model
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Model"
+                  value={instrumentForm.model}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      model: e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Serial Number
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Serial Number"
+                  value={instrumentForm.serial_number}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      serial_number:
+                        e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Capacity
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Example: 30 kg"
+                  value={instrumentForm.capacity}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      capacity: e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Location
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Instrument location"
+                  value={instrumentForm.location}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      location: e.target.value,
+                    })
+                  }
+                />
+
+                <label>
+                  Purchase Date
+                </label>
+
+                <input
+                  type="date"
+                  value={instrumentForm.purchase_date}
+                  onChange={(e) =>
+                    setInstrumentForm({
+                      ...instrumentForm,
+                      purchase_date:
+                        e.target.value,
+                    })
+                  }
+                />
+
+                <button
+                  className="login-button"
+                  onClick={createInstrument}
+                  disabled={instrumentsLoading}
+                >
+                  {instrumentsLoading
+                    ? "Registering..."
+                    : "⚖️ Register Instrument"}
+                </button>
+              </div>
+            )}
 
             {instrumentsError && (
               <div className="error-box">
                 ❌ {instrumentsError}
-              </div>
-            )}
-
-            {instrumentsLoading && (
-              <div className="loading-box">
-                Loading instruments...
               </div>
             )}
 
@@ -1151,184 +1530,138 @@ function App() {
                 </div>
               )}
 
-            {instruments.map((instrument) => {
-              const existingRequest =
-                myRequests.find(
-                  (request) =>
-                    request.instrument_id ===
-                    instrument.id
-                );
-
-              return (
-                <div
-                  className="result-card"
-                  key={instrument.id}
-                >
-                  <div className="verified-icon">
-                    ⚖️
-                  </div>
-
-                  <h2>
-                    {instrument.unique_id}
-                  </h2>
-
-                  <p className="verified-text">
-                    {instrument.instrument_type ||
-                      "Weighing Instrument"}
-                  </p>
-
-                  <div className="details">
-                    <div className="detail-row">
-                      <span>
-                        Instrument ID
-                      </span>
-
-                      <strong>
-                        {instrument.id}
-                      </strong>
-                    </div>
-
-                    <div className="detail-row">
-                      <span>
-                        Manufacturer
-                      </span>
-
-                      <strong>
-                        {instrument.manufacturer}
-                      </strong>
-                    </div>
-
-                    <div className="detail-row">
-                      <span>
-                        Model
-                      </span>
-
-                      <strong>
-                        {instrument.model}
-                      </strong>
-                    </div>
-
-                    <div className="detail-row">
-                      <span>
-                        Serial Number
-                      </span>
-
-                      <strong>
-                        {instrument.serial_number}
-                      </strong>
-                    </div>
-
-                    <div className="detail-row">
-                      <span>
-                        Capacity
-                      </span>
-
-                      <strong>
-                        {instrument.capacity}
-                      </strong>
-                    </div>
-
-                    <div className="detail-row">
-                      <span>
-                        Location
-                      </span>
-
-                      <strong>
-                        {instrument.location}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {existingRequest ? (
-                    <div
-                      className={
-                        existingRequest.status ===
-                        "REJECTED"
-                          ? "error-box"
-                          : "security-message"
-                      }
-                    >
-                      {existingRequest.status ===
-                      "PENDING"
-                        ? "⏳ Verification request is pending."
-                        : existingRequest.status ===
-                          "VERIFIED"
-                        ? "✅ Instrument is VERIFIED."
-                        : "❌ Instrument was REJECTED."}
-                      <br />
-                      <strong>
-                        Application ID:{" "}
-                        {existingRequest.application_id}
-                      </strong>
-                    </div>
-                  ) : (
-                    <button
-                      className="login-button"
-                      onClick={() =>
-                        requestVerification(
-                          instrument.id
-                        )
-                      }
-                      disabled={
-                        requestLoading === instrument.id
-                      }
-                    >
-                      {requestLoading ===
-                      instrument.id
-                        ? "Requesting..."
-                        : "📋 Request Verification"}
-                    </button>
-                  )}
+            {instruments.map((instrument) => (
+              <div
+                className="result-card"
+                key={instrument.id}
+              >
+                <div className="verified-icon">
+                  ⚖️
                 </div>
-              );
-            })}
-          </section>
 
-          {/* MY VERIFICATION REQUESTS */}
-
-          <section className="verify-card">
-            <div className="inspection-header">
-              <div>
                 <h2>
-                  📋 My Verification Requests
+                  {instrument.unique_id}
                 </h2>
 
-                <p className="card-description">
-                  Track your submitted verification
-                  applications.
+                <p className="verified-text">
+                  {instrument.instrument_type}
                 </p>
+
+                <div className="details">
+                  <div className="detail-row">
+                    <span>
+                      Instrument ID
+                    </span>
+
+                    <strong>
+                      {instrument.id}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Manufacturer
+                    </span>
+
+                    <strong>
+                      {instrument.manufacturer}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Model
+                    </span>
+
+                    <strong>
+                      {instrument.model}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Serial Number
+                    </span>
+
+                    <strong>
+                      {instrument.serial_number}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Capacity
+                    </span>
+
+                    <strong>
+                      {instrument.capacity}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Location
+                    </span>
+
+                    <strong>
+                      {instrument.location}
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  className="login-button"
+                  onClick={() =>
+                    requestVerification(
+                      instrument.id
+                    )
+                  }
+                >
+                  📋 Request Verification
+                </button>
               </div>
+            ))}
+          </section>
 
-              <button
-                className="secondary-button"
-                onClick={loadMyRequests}
-                disabled={myRequestsLoading}
-              >
-                🔄 Refresh
-              </button>
-            </div>
+          {/* =========================
+              MY REQUESTS
+          ========================= */}
 
-            {myRequestsError && (
+          <section className="verify-card">
+            <h2>
+              📋 My Verification Requests
+            </h2>
+
+            <p className="card-description">
+              Track the status of your verification
+              applications.
+            </p>
+
+            <button
+              className="login-button"
+              onClick={loadMyRequests}
+              disabled={requestsLoading}
+            >
+              {requestsLoading
+                ? "Loading..."
+                : "🔄 Refresh Requests"}
+            </button>
+
+            {requestsError && (
               <div className="error-box">
-                ❌ {myRequestsError}
+                ❌ {requestsError}
               </div>
             )}
 
-            {myRequestsLoading && (
-              <div className="loading-box">
-                Loading verification requests...
-              </div>
-            )}
-
-            {!myRequestsLoading &&
-              !myRequestsError &&
-              myRequests.length === 0 && (
+            {!requestsLoading &&
+              !requestsError &&
+              requests.length === 0 && (
                 <div className="loading-box">
-                  📋 No verification requests yet.
+                  📋 No verification requests found.
                 </div>
               )}
 
-            {myRequests.map((request) => (
+            {requests.map((request) => (
               <div
                 className="result-card"
                 key={request.request_id}
@@ -1346,76 +1679,10 @@ function App() {
                 </h2>
 
                 <p className="verified-text">
-                  Verification Application
+                  Verification Request
                 </p>
 
                 <div className="details">
-                  <div className="detail-row">
-                    <span>
-                      Request ID
-                    </span>
-
-                    <strong>
-                      {request.request_id}
-                    </strong>
-                  </div>
-
-                  <div className="detail-row">
-                    <span>
-                      Application ID
-                    </span>
-
-                    <strong>
-                      {request.application_id}
-                    </strong>
-                  </div>
-
-                  <div className="detail-row">
-                    <span>
-                      Instrument ID
-                    </span>
-
-                    <strong>
-                      {request.instrument_id}
-                    </strong>
-                  </div>
-
-                  <div className="detail-row">
-                    <span>
-                      Instrument
-                    </span>
-
-                    <strong>
-                      {request.instrument
-                        ?.instrument_type ||
-                        "N/A"}
-                    </strong>
-                  </div>
-
-                  <div className="detail-row">
-                    <span>
-                      Manufacturer
-                    </span>
-
-                    <strong>
-                      {request.instrument
-                        ?.manufacturer ||
-                        "N/A"}
-                    </strong>
-                  </div>
-
-                  <div className="detail-row">
-                    <span>
-                      Serial Number
-                    </span>
-
-                    <strong>
-                      {request.instrument
-                        ?.serial_number ||
-                        "N/A"}
-                    </strong>
-                  </div>
-
                   <div className="detail-row">
                     <span>
                       Status
@@ -1432,31 +1699,205 @@ function App() {
                       {request.status}
                     </strong>
                   </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Instrument
+                    </span>
+
+                    <strong>
+                      {
+                        request.instrument
+                          ?.instrument_type ||
+                        "N/A"
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Manufacturer
+                    </span>
+
+                    <strong>
+                      {
+                        request.instrument
+                          ?.manufacturer ||
+                        "N/A"
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Model
+                    </span>
+
+                    <strong>
+                      {
+                        request.instrument
+                          ?.model ||
+                        "N/A"
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Serial Number
+                    </span>
+
+                    <strong>
+                      {
+                        request.instrument
+                          ?.serial_number ||
+                        "N/A"
+                      }
+                    </strong>
+                  </div>
                 </div>
 
-                {request.status ===
-                  "PENDING" && (
+                {request.status === "VERIFIED" && (
                   <div className="security-message">
-                    ⏳ Waiting for inspector
-                    verification.
+                    ✅ Instrument successfully verified.
                   </div>
                 )}
 
-                {request.status ===
-                  "VERIFIED" && (
-                  <div className="security-message">
-                    ✅ Your instrument has passed
-                    verification.
-                  </div>
-                )}
-
-                {request.status ===
-                  "REJECTED" && (
+                {request.status === "REJECTED" && (
                   <div className="error-box">
-                    ❌ Your instrument did not pass
-                    verification.
+                    ❌ Instrument was rejected.
                   </div>
                 )}
+              </div>
+            ))}
+          </section>
+
+          {/* =========================
+              CERTIFICATES
+          ========================= */}
+
+          <section className="verify-card">
+            <h2>
+              📜 My Certificates
+            </h2>
+
+            <p className="card-description">
+              View and download your valid
+              TrueWeight certificates.
+            </p>
+
+            <button
+              className="login-button"
+              onClick={loadMerchantCertificates}
+              disabled={certificatesLoading}
+            >
+              {certificatesLoading
+                ? "Loading Certificates..."
+                : "🔄 Refresh Certificates"}
+            </button>
+
+            {certificatesError && (
+              <div className="error-box">
+                ❌ {certificatesError}
+              </div>
+            )}
+
+            {!certificatesLoading &&
+              !certificatesError &&
+              merchantCertificates.length === 0 && (
+                <div className="loading-box">
+                  📜 No certificates available yet.
+                </div>
+              )}
+
+            {merchantCertificates.map((certificate) => (
+              <div
+                className="result-card"
+                key={certificate.certificate_id}
+              >
+                <div className="verified-icon">
+                  ✓
+                </div>
+
+                <h2>
+                  {certificate.certificate_number}
+                </h2>
+
+                <p className="verified-text">
+                  TrueWeight Verification Certificate
+                </p>
+
+                <div className="details">
+                  <div className="detail-row">
+                    <span>
+                      Certificate ID
+                    </span>
+
+                    <strong>
+                      {certificate.certificate_id}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Request ID
+                    </span>
+
+                    <strong>
+                      {
+                        certificate.verification_request_id
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Status
+                    </span>
+
+                    <strong className="valid">
+                      {certificate.status ||
+                        "VALID"}
+                    </strong>
+                  </div>
+
+                  <div className="detail-row">
+                    <span>
+                      Issued At
+                    </span>
+
+                    <strong>
+                      {certificate.issued_at
+                        ? new Date(
+                            certificate.issued_at
+                          ).toLocaleString()
+                        : "N/A"}
+                    </strong>
+                  </div>
+                </div>
+
+                <button
+                  className="login-button"
+                  onClick={() =>
+                    downloadCertificate(
+                      certificate.certificate_number
+                    )
+                  }
+                >
+                  📥 Download Certificate
+                </button>
+
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    window.open(
+                      `/verify/${certificate.certificate_number}`,
+                      "_blank"
+                    )
+                  }
+                >
+                  🔍 Verify Certificate
+                </button>
               </div>
             ))}
           </section>
@@ -1505,11 +1946,13 @@ function App() {
 
             <p>
               Manage weighing instrument
-              verification requests.
+              verification requests and certificates.
             </p>
           </section>
 
-          {/* INSPECTOR INFORMATION */}
+          {/* =========================
+              INSPECTOR INFO
+          ========================= */}
 
           <section className="verify-card">
             <h2>
@@ -1518,7 +1961,9 @@ function App() {
 
             <div className="details">
               <div className="detail-row">
-                <span>User ID</span>
+                <span>
+                  User ID
+                </span>
 
                 <strong>
                   {user?.id || "N/A"}
@@ -1526,7 +1971,9 @@ function App() {
               </div>
 
               <div className="detail-row">
-                <span>Name</span>
+                <span>
+                  Name
+                </span>
 
                 <strong>
                   {user?.name || "Inspector"}
@@ -1534,7 +1981,9 @@ function App() {
               </div>
 
               <div className="detail-row">
-                <span>Email</span>
+                <span>
+                  Email
+                </span>
 
                 <strong>
                   {user?.email || "N/A"}
@@ -1542,7 +1991,9 @@ function App() {
               </div>
 
               <div className="detail-row">
-                <span>Role</span>
+                <span>
+                  Role
+                </span>
 
                 <strong className="valid">
                   {user?.role || "INSPECTOR"}
@@ -1551,14 +2002,16 @@ function App() {
             </div>
           </section>
 
-          {/* INSPECTION FORM */}
+          {/* =========================
+              INSPECTION
+          ========================= */}
 
           {selectedRequest && (
             <section className="verify-card inspection-card">
               <div className="inspection-header">
                 <div>
                   <h2>
-                    Perform Inspection
+                    🔍 Perform Inspection
                   </h2>
 
                   <p className="card-description">
@@ -1582,7 +2035,9 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.application_id}
+                    {
+                      selectedRequest.application_id
+                    }
                   </strong>
                 </div>
 
@@ -1602,9 +2057,11 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.instrument
-                      ?.instrument_type ||
-                      "N/A"}
+                    {
+                      selectedRequest.instrument
+                        ?.instrument_type ||
+                      "N/A"
+                    }
                   </strong>
                 </div>
 
@@ -1614,9 +2071,11 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.instrument
-                      ?.manufacturer ||
-                      "N/A"}
+                    {
+                      selectedRequest.instrument
+                        ?.manufacturer ||
+                      "N/A"
+                    }
                   </strong>
                 </div>
 
@@ -1626,9 +2085,11 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.instrument
-                      ?.model ||
-                      "N/A"}
+                    {
+                      selectedRequest.instrument
+                        ?.model ||
+                      "N/A"
+                    }
                   </strong>
                 </div>
 
@@ -1638,9 +2099,11 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.instrument
-                      ?.serial_number ||
-                      "N/A"}
+                    {
+                      selectedRequest.instrument
+                        ?.serial_number ||
+                      "N/A"
+                    }
                   </strong>
                 </div>
 
@@ -1650,9 +2113,11 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.instrument
-                      ?.capacity ||
-                      "N/A"}
+                    {
+                      selectedRequest.instrument
+                        ?.capacity ||
+                      "N/A"
+                    }
                   </strong>
                 </div>
 
@@ -1662,9 +2127,11 @@ function App() {
                   </span>
 
                   <strong>
-                    {selectedRequest.instrument
-                      ?.location ||
-                      "N/A"}
+                    {
+                      selectedRequest.instrument
+                        ?.location ||
+                      "N/A"
+                    }
                   </strong>
                 </div>
               </div>
@@ -1683,7 +2150,6 @@ function App() {
                 <input
                   type="number"
                   step="any"
-                  min="0"
                   placeholder="Example: 10"
                   value={standardWeight}
                   onChange={(e) =>
@@ -1700,7 +2166,6 @@ function App() {
                 <input
                   type="number"
                   step="any"
-                  min="0"
                   placeholder="Example: 10.02"
                   value={machineReading}
                   onChange={(e) =>
@@ -1815,35 +2280,150 @@ function App() {
                         }
                       </strong>
                     </div>
+                  </div>
 
+                  {inspectionResult.result ===
+                    "PASS" && (
+                    <div className="security-message">
+                      ✅ Instrument passed verification.
+                      You can now generate the official
+                      certificate.
+                    </div>
+                  )}
+
+                  {inspectionResult.result ===
+                    "FAIL" && (
+                    <div className="error-box">
+                      ❌ Instrument failed verification.
+                      Certificate cannot be generated.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {inspectionResult &&
+                inspectionResult.result ===
+                  "PASS" &&
+                !certificateResult && (
+                  <button
+                    className="login-button"
+                    onClick={generateCertificate}
+                    disabled={certificateLoading}
+                  >
+                    {certificateLoading
+                      ? "Generating Certificate..."
+                      : "📜 Generate Certificate"}
+                  </button>
+                )}
+
+              {certificateError && (
+                <div className="error-box">
+                  ❌ {certificateError}
+                </div>
+              )}
+
+              {certificateResult && (
+                <div className="result-card">
+                  <div className="verified-icon">
+                    ✓
+                  </div>
+
+                  <h2>
+                    Certificate Generated
+                  </h2>
+
+                  <p className="verified-text">
+                    The verification certificate was
+                    generated successfully.
+                  </p>
+
+                  <div className="details">
                     <div className="detail-row">
                       <span>
-                        Inspector ID
+                        Certificate Number
                       </span>
 
                       <strong>
                         {
-                          inspectionResult.inspector_id
+                          certificateResult.certificate_number
                         }
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>
+                        Certificate ID
+                      </span>
+
+                      <strong>
+                        {
+                          certificateResult.certificate_id
+                        }
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>
+                        Verification Request
+                      </span>
+
+                      <strong>
+                        {
+                          certificateResult.verification_request_id
+                        }
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>
+                        Inspection ID
+                      </span>
+
+                      <strong>
+                        {
+                          certificateResult.inspection_id
+                        }
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>
+                        Result
+                      </span>
+
+                      <strong className="valid">
+                        {certificateResult.result}
                       </strong>
                     </div>
                   </div>
 
                   <div className="security-message">
-                    {inspectionResult.result ===
-                    "PASS"
-                      ? "✅ Instrument passed verification. Status changed to VERIFIED."
-                      : "❌ Instrument failed verification. Status changed to REJECTED."}
+                    🛡️ Certificate is ready and can be
+                    verified using the QR code.
                   </div>
 
-                  {inspectionResult.remarks && (
-                    <div className="security-message">
-                      <strong>
-                        Remarks:
-                      </strong>{" "}
-                      {inspectionResult.remarks}
-                    </div>
-                  )}
+                  <button
+                    className="login-button"
+                    onClick={() =>
+                      downloadCertificate(
+                        certificateResult.certificate_number
+                      )
+                    }
+                  >
+                    📥 Download Certificate PDF
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    onClick={() =>
+                      window.open(
+                        `/verify/${certificateResult.certificate_number}`,
+                        "_blank"
+                      )
+                    }
+                  >
+                    🔍 Open Verification Page
+                  </button>
                 </div>
               )}
 
@@ -1861,38 +2441,32 @@ function App() {
             </section>
           )}
 
-          {/* REQUESTS */}
+          {/* =========================
+              REQUESTS
+          ========================= */}
 
           <section className="verify-card">
-            <div className="inspection-header">
-              <div>
-                <h2>
-                  Verification Requests
-                </h2>
+            <h2>
+              📋 Verification Requests
+            </h2>
 
-                <p className="card-description">
-                  Requests submitted by merchants.
-                </p>
-              </div>
+            <p className="card-description">
+              Requests submitted by merchants.
+            </p>
 
-              <button
-                className="secondary-button"
-                onClick={loadRequests}
-                disabled={requestsLoading}
-              >
-                🔄 Refresh
-              </button>
-            </div>
+            <button
+              className="login-button"
+              onClick={loadRequests}
+              disabled={requestsLoading}
+            >
+              {requestsLoading
+                ? "Loading Requests..."
+                : "🔄 Refresh Requests"}
+            </button>
 
             {requestsError && (
               <div className="error-box">
                 ❌ {requestsError}
-              </div>
-            )}
-
-            {requestsLoading && (
-              <div className="loading-box">
-                Loading requests...
               </div>
             )}
 
@@ -1910,11 +2484,9 @@ function App() {
                 key={request.request_id}
               >
                 <div className="verified-icon">
-                  {request.status ===
-                  "PENDING"
+                  {request.status === "PENDING"
                     ? "!"
-                    : request.status ===
-                      "VERIFIED"
+                    : request.status === "VERIFIED"
                     ? "✓"
                     : "✕"}
                 </div>
@@ -1935,16 +2507,6 @@ function App() {
 
                     <strong>
                       {request.request_id}
-                    </strong>
-                  </div>
-
-                  <div className="detail-row">
-                    <span>
-                      Application ID
-                    </span>
-
-                    <strong>
-                      {request.application_id}
                     </strong>
                   </div>
 
@@ -1981,9 +2543,11 @@ function App() {
                     </span>
 
                     <strong>
-                      {request.instrument
-                        ?.instrument_type ||
-                        "N/A"}
+                      {
+                        request.instrument
+                          ?.instrument_type ||
+                        "N/A"
+                      }
                     </strong>
                   </div>
 
@@ -1993,9 +2557,11 @@ function App() {
                     </span>
 
                     <strong>
-                      {request.instrument
-                        ?.manufacturer ||
-                        "N/A"}
+                      {
+                        request.instrument
+                          ?.manufacturer ||
+                        "N/A"
+                      }
                     </strong>
                   </div>
 
@@ -2005,9 +2571,11 @@ function App() {
                     </span>
 
                     <strong>
-                      {request.instrument
-                        ?.model ||
-                        "N/A"}
+                      {
+                        request.instrument
+                          ?.model ||
+                        "N/A"
+                      }
                     </strong>
                   </div>
 
@@ -2017,9 +2585,11 @@ function App() {
                     </span>
 
                     <strong>
-                      {request.instrument
-                        ?.serial_number ||
-                        "N/A"}
+                      {
+                        request.instrument
+                          ?.serial_number ||
+                        "N/A"
+                      }
                     </strong>
                   </div>
 
@@ -2029,9 +2599,11 @@ function App() {
                     </span>
 
                     <strong>
-                      {request.instrument
-                        ?.capacity ||
-                        "N/A"}
+                      {
+                        request.instrument
+                          ?.capacity ||
+                        "N/A"
+                      }
                     </strong>
                   </div>
 
@@ -2041,15 +2613,16 @@ function App() {
                     </span>
 
                     <strong>
-                      {request.instrument
-                        ?.location ||
-                        "N/A"}
+                      {
+                        request.instrument
+                          ?.location ||
+                        "N/A"
+                      }
                     </strong>
                   </div>
                 </div>
 
-                {request.status ===
-                  "PENDING" && (
+                {request.status === "PENDING" && (
                   <button
                     className="login-button"
                     onClick={() =>
@@ -2063,16 +2636,15 @@ function App() {
                 {request.status ===
                   "VERIFIED" && (
                   <div className="security-message">
-                    ✅ Inspection completed
-                    successfully.
+                    ✅ Inspection completed and
+                    instrument verified.
                   </div>
                 )}
 
                 {request.status ===
                   "REJECTED" && (
                   <div className="error-box">
-                    ❌ This instrument was
-                    rejected.
+                    ❌ This instrument was rejected.
                   </div>
                 )}
               </div>
