@@ -1,0 +1,433 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    Inter,
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  background: #f4f7fb;
+  color: #172033;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================
+   NAVBAR
+========================= */
+
+.navbar {
+  height: 70px;
+  background: #ffffff;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 8%;
+
+  border-bottom: 1px solid #e5e9f0;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.logo span {
+  font-weight: 400;
+}
+
+.nav-status {
+  font-size: 14px;
+  color: #667085;
+}
+
+/* =========================
+   MAIN
+========================= */
+
+.container {
+  width: 100%;
+  max-width: 900px;
+
+  margin: 0 auto;
+  padding: 70px 20px;
+
+  flex: 1;
+}
+
+/* =========================
+   HERO
+========================= */
+
+.hero {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.badge {
+  display: inline-block;
+
+  padding: 7px 14px;
+
+  border-radius: 20px;
+
+  background: #eaf7ef;
+  color: #18864b;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  margin-bottom: 18px;
+}
+
+.hero h1 {
+  font-size: 42px;
+  margin-bottom: 15px;
+}
+
+.hero p {
+  max-width: 620px;
+  margin: auto;
+
+  color: #667085;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* =========================
+   VERIFY CARD
+========================= */
+
+.verify-card {
+  background: white;
+
+  border-radius: 16px;
+
+  padding: 35px;
+
+  box-shadow:
+    0 10px 35px rgba(16, 24, 40, 0.08);
+
+  border: 1px solid #e6eaf0;
+}
+
+.verify-card > h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.card-description {
+  color: #667085;
+  margin-bottom: 25px;
+}
+
+/* =========================
+   INPUT
+========================= */
+
+.input-group {
+  display: flex;
+  gap: 12px;
+}
+
+.input-group input {
+  flex: 1;
+
+  height: 50px;
+
+  border: 1px solid #d0d5dd;
+
+  border-radius: 9px;
+
+  padding: 0 15px;
+
+  font-size: 15px;
+
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: #344054;
+}
+
+.input-group button {
+  height: 50px;
+
+  padding: 0 28px;
+
+  border: none;
+
+  border-radius: 9px;
+
+  background: #172033;
+
+  color: white;
+
+  font-size: 15px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.input-group button:hover {
+  opacity: 0.9;
+}
+
+.input-group button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* =========================
+   ERROR
+========================= */
+
+.error-box {
+  margin-top: 20px;
+
+  padding: 14px;
+
+  border-radius: 8px;
+
+  background: #fff1f1;
+
+  color: #c62828;
+
+  border: 1px solid #ffd5d5;
+}
+
+/* =========================
+   RESULT
+========================= */
+
+.result-card {
+  margin-top: 35px;
+
+  border: 1px solid #ccebd8;
+
+  border-radius: 14px;
+
+  padding: 30px;
+
+  background: #fbfffc;
+}
+
+.verified-icon {
+  width: 55px;
+  height: 55px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #dff5e7;
+
+  color: #18864b;
+
+  font-size: 30px;
+  font-weight: 800;
+
+  margin-bottom: 15px;
+}
+
+.result-card h2 {
+  font-size: 25px;
+  margin-bottom: 8px;
+}
+
+.verified-text {
+  color: #667085;
+  margin-bottom: 25px;
+}
+
+/* =========================
+   DETAILS
+========================= */
+
+.details {
+  border-top: 1px solid #e4e7ec;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+
+  padding: 15px 0;
+
+  border-bottom: 1px solid #e4e7ec;
+
+  gap: 20px;
+}
+
+.detail-row span {
+  color: #667085;
+}
+
+.detail-row strong {
+  text-align: right;
+  word-break: break-word;
+}
+
+.valid {
+  color: #18864b;
+}
+
+/* =========================
+   SECURITY
+========================= */
+
+.security-message {
+  margin-top: 22px;
+
+  padding: 14px;
+
+  background: #f2f8ff;
+
+  border-radius: 8px;
+
+  color: #345;
+
+  font-size: 14px;
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+footer {
+  text-align: center;
+
+  padding: 25px;
+
+  color: #98a2b3;
+
+  font-size: 13px;
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 600px) {
+
+  .navbar {
+    padding: 0 20px;
+  }
+
+  .nav-status {
+    display: none;
+  }
+
+  .container {
+    padding: 45px 15px;
+  }
+
+  .hero h1 {
+    font-size: 32px;
+  }
+
+  .verify-card {
+    padding: 22px;
+  }
+
+  .input-group {
+    flex-direction: column;
+  }
+
+  .input-group button {
+    width: 100%;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .detail-row strong {
+    text-align: left;
+  }
+}
+
+
+.download-button {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 20px;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  background: #111827;
+  color: white;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.download-button:hover {
+  opacity: 0.9;
+}
+
+
+.login-button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: #111827;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logout-button {
+  margin-left: auto;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #ef4444;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.download-button {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 20px;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  background: #111827;
+  color: white;
+  box-sizing: border-box;
+}
+
+.download-button:hover {
+  opacity: 0.9;
+}
