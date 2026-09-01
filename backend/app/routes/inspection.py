@@ -13,6 +13,11 @@ router = APIRouter(
 )
 
 
+# =========================================================
+# CREATE INSPECTION
+# INSPECTOR ONLY
+# =========================================================
+
 @router.post("/")
 def create_inspection(
     verification_request_id: int,
@@ -24,14 +29,12 @@ def create_inspection(
     current_user: dict = Depends(get_current_user)
 ):
 
-    # Only inspectors can perform inspection
     if current_user["role"] != "INSPECTOR":
         raise HTTPException(
             status_code=403,
             detail="Only inspectors can perform inspections"
         )
 
-    # Check verification request
     verification_request = (
         db.query(VerificationRequest)
         .filter(
@@ -46,25 +49,21 @@ def create_inspection(
             detail="Verification request not found"
         )
 
-    # Request should be pending
     if verification_request.status != "PENDING":
         raise HTTPException(
             status_code=400,
             detail="Verification request is not pending"
         )
 
-    # Calculate error
     calculated_error = abs(
         machine_reading - standard_weight
     )
 
-    # Determine result
     if calculated_error <= permissible_error:
         result = "PASS"
     else:
         result = "FAIL"
 
-    # Create inspection
     inspection = Inspection(
         verification_request_id=verification_request_id,
         standard_weight=standard_weight,
@@ -78,7 +77,6 @@ def create_inspection(
 
     db.add(inspection)
 
-    # Update verification request status
     if result == "PASS":
         verification_request.status = "VERIFIED"
     else:
@@ -101,6 +99,10 @@ def create_inspection(
     }
 
 
+# =========================================================
+# GET SINGLE INSPECTION
+# =========================================================
+
 @router.get("/{inspection_id}")
 def get_inspection(
     inspection_id: int,
@@ -110,7 +112,9 @@ def get_inspection(
 
     inspection = (
         db.query(Inspection)
-        .filter(Inspection.id == inspection_id)
+        .filter(
+            Inspection.id == inspection_id
+        )
         .first()
     )
 

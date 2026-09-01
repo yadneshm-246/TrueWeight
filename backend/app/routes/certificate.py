@@ -8,12 +8,15 @@ import qrcode
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 from app.database import get_db
+
 from app.models.certificate import Certificate
 from app.models.verification_request import VerificationRequest
 from app.models.inspection import Inspection
 from app.models.instrument import Instrument
+
 from app.auth.security import get_current_user
 
 
@@ -23,11 +26,22 @@ router = APIRouter(
 )
 
 
+# =========================================================
+# DIRECTORIES
+# =========================================================
+
 CERTIFICATE_DIR = "uploads/certificates"
 QR_DIR = "uploads/qr"
 
 os.makedirs(CERTIFICATE_DIR, exist_ok=True)
 os.makedirs(QR_DIR, exist_ok=True)
+
+
+# =========================================================
+# FRONTEND URL
+# =========================================================
+
+FRONTEND_URL = "http://192.168.29.127:5173"
 
 
 # =========================================================
@@ -41,21 +55,25 @@ def generate_certificate(
     current_user: dict = Depends(get_current_user)
 ):
 
-    # Only inspectors can generate certificates
+    # =====================================================
+    # ONLY INSPECTOR
+    # =====================================================
+
     if current_user["role"] != "INSPECTOR":
         raise HTTPException(
             status_code=403,
             detail="Only inspectors can generate certificates"
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CHECK VERIFICATION REQUEST
-    # -----------------------------------------------------
+    # =====================================================
 
     request = (
         db.query(VerificationRequest)
         .filter(
-            VerificationRequest.id == verification_request_id
+            VerificationRequest.id
+            == verification_request_id
         )
         .first()
     )
@@ -66,9 +84,9 @@ def generate_certificate(
             detail="Verification request not found"
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CHECK INSPECTION
-    # -----------------------------------------------------
+    # =====================================================
 
     inspection = (
         db.query(Inspection)
@@ -85,9 +103,9 @@ def generate_certificate(
             detail="Inspection not found"
         )
 
-    # -----------------------------------------------------
-    # CERTIFICATE ONLY FOR PASS
-    # -----------------------------------------------------
+    # =====================================================
+    # ONLY PASS
+    # =====================================================
 
     if inspection.result != "PASS":
         raise HTTPException(
@@ -95,14 +113,15 @@ def generate_certificate(
             detail="Certificate cannot be generated for failed inspection"
         )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CHECK INSTRUMENT
-    # -----------------------------------------------------
+    # =====================================================
 
     instrument = (
         db.query(Instrument)
         .filter(
-            Instrument.id == request.instrument_id
+            Instrument.id
+            == request.instrument_id
         )
         .first()
     )
@@ -114,55 +133,79 @@ def generate_certificate(
         )
 
     # =====================================================
-    # CREATE CERTIFICATE NUMBER
+    # CERTIFICATE NUMBER
     # =====================================================
 
     certificate_number = (
-        "TW-CERT-" + uuid.uuid4().hex[:8].upper()
+        "TW-CERT-"
+        + uuid.uuid4().hex[:8].upper()
     )
 
     # =====================================================
-    # QR CODE
+    # VERIFICATION URL
     # =====================================================
-    #
-    # IMPORTANT:
-    # QR opens the React frontend verification page.
-    #
-    # PC:
-    # http://localhost:5173
-    #
-    # Mobile:
-    # http://192.168.29.48:5173
-    #
-    # Therefore we use the LAN IP here.
-    #
 
     verification_url = (
-    f"http://192.168.29.127:5173/verify/"
-    f"{certificate_number}"
-)
+        f"{FRONTEND_URL}/verify/"
+        f"{certificate_number}"
+    )
 
-    qr = qrcode.make(verification_url)
+    # =====================================================
+    # CREATE QR CODE
+    # =====================================================
 
-    qr_filename = f"{certificate_number}.png"
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=12,
+        border=4,
+    )
+
+    qr.add_data(verification_url)
+    qr.make(fit=True)
+
+    qr_image = qr.make_image(
+        fill_color="black",
+        back_color="white"
+    )
+
+    qr_filename = (
+        f"{certificate_number}.png"
+    )
 
     qr_path = os.path.join(
         QR_DIR,
         qr_filename
     )
 
-    qr.save(qr_path)
+    qr_image.save(qr_path)
 
     # =====================================================
-    # PDF CERTIFICATE
+    # VERIFY QR FILE EXISTS
     # =====================================================
 
-    pdf_filename = f"{certificate_number}.pdf"
+    if not os.path.exists(qr_path):
+        raise HTTPException(
+            status_code=500,
+            detail="QR code could not be generated"
+        )
+
+    # =====================================================
+    # PDF PATH
+    # =====================================================
+
+    pdf_filename = (
+        f"{certificate_number}.pdf"
+    )
 
     pdf_path = os.path.join(
         CERTIFICATE_DIR,
         pdf_filename
     )
+
+    # =====================================================
+    # CREATE PDF
+    # =====================================================
 
     pdf = canvas.Canvas(
         pdf_path,
@@ -171,11 +214,27 @@ def generate_certificate(
 
     width, height = A4
 
-    # -----------------------------------------------------
-    # TITLE
-    # -----------------------------------------------------
+    # =====================================================
+    # BORDER
+    # =====================================================
 
-    pdf.setFont("Helvetica-Bold", 24)
+    pdf.setLineWidth(2)
+
+    pdf.rect(
+        35,
+        35,
+        width - 70,
+        height - 70
+    )
+
+    # =====================================================
+    # TITLE
+    # =====================================================
+
+    pdf.setFont(
+        "Helvetica-Bold",
+        24
+    )
 
     pdf.drawCentredString(
         width / 2,
@@ -183,7 +242,10 @@ def generate_certificate(
         "TRUEWEIGHT"
     )
 
-    pdf.setFont("Helvetica-Bold", 18)
+    pdf.setFont(
+        "Helvetica-Bold",
+        18
+    )
 
     pdf.drawCentredString(
         width / 2,
@@ -191,11 +253,14 @@ def generate_certificate(
         "VERIFICATION CERTIFICATE"
     )
 
-    # -----------------------------------------------------
+    # =====================================================
     # CERTIFICATE NUMBER
-    # -----------------------------------------------------
+    # =====================================================
 
-    pdf.setFont("Helvetica-Bold", 12)
+    pdf.setFont(
+        "Helvetica-Bold",
+        12
+    )
 
     pdf.drawString(
         60,
@@ -203,29 +268,60 @@ def generate_certificate(
         f"Certificate Number: {certificate_number}"
     )
 
-    # -----------------------------------------------------
+    # =====================================================
     # DETAILS
-    # -----------------------------------------------------
+    # =====================================================
 
-    pdf.setFont("Helvetica", 11)
+    pdf.setFont(
+        "Helvetica",
+        10
+    )
 
     y = height - 205
 
     details = [
-        f"Verification Request ID: {verification_request_id}",
-        f"Inspection ID: {inspection.id}",
-        f"Instrument ID: {instrument.id}",
-        f"Instrument Type: {instrument.instrument_type}",
-        f"Manufacturer: {instrument.manufacturer}",
-        f"Model: {instrument.model}",
-        f"Serial Number: {instrument.serial_number}",
-        f"Capacity: {instrument.capacity}",
-        f"Location: {instrument.location}",
-        f"Standard Weight: {inspection.standard_weight}",
-        f"Machine Reading: {inspection.machine_reading}",
-        f"Calculated Error: {inspection.calculated_error}",
-        f"Permissible Error: {inspection.permissible_error}",
-        f"Result: {inspection.result}",
+
+        f"Verification Request ID: "
+        f"{verification_request_id}",
+
+        f"Inspection ID: "
+        f"{inspection.id}",
+
+        f"Instrument ID: "
+        f"{instrument.id}",
+
+        f"Instrument Type: "
+        f"{instrument.instrument_type}",
+
+        f"Manufacturer: "
+        f"{instrument.manufacturer}",
+
+        f"Model: "
+        f"{instrument.model}",
+
+        f"Serial Number: "
+        f"{instrument.serial_number}",
+
+        f"Capacity: "
+        f"{instrument.capacity}",
+
+        f"Location: "
+        f"{instrument.location}",
+
+        f"Standard Weight: "
+        f"{inspection.standard_weight} kg",
+
+        f"Machine Reading: "
+        f"{inspection.machine_reading} kg",
+
+        f"Calculated Error: "
+        f"{inspection.calculated_error} kg",
+
+        f"Permissible Error: "
+        f"{inspection.permissible_error} kg",
+
+        f"Result: "
+        f"{inspection.result}",
     ]
 
     for detail in details:
@@ -236,13 +332,16 @@ def generate_certificate(
             detail
         )
 
-        y -= 25
+        y -= 22
 
-    # -----------------------------------------------------
+    # =====================================================
     # REMARKS
-    # -----------------------------------------------------
+    # =====================================================
 
-    pdf.setFont("Helvetica-Bold", 11)
+    pdf.setFont(
+        "Helvetica-Bold",
+        11
+    )
 
     pdf.drawString(
         70,
@@ -250,31 +349,103 @@ def generate_certificate(
         "Remarks:"
     )
 
-    pdf.setFont("Helvetica", 11)
+    pdf.setFont(
+        "Helvetica",
+        10
+    )
+
+    remarks = (
+        inspection.remarks
+        or "No remarks"
+    )
 
     pdf.drawString(
         70,
         y - 25,
-        inspection.remarks or "No remarks"
+        remarks[:90]
     )
 
-    # -----------------------------------------------------
-    # QR CODE
-    # -----------------------------------------------------
+    # =====================================================
+    # QR CODE SECTION
+    # =====================================================
 
+    qr_x = width - 190
+    qr_y = 80
+    qr_size = 120
+
+    # QR BOX
+    pdf.setLineWidth(1)
+
+    pdf.rect(
+        qr_x - 10,
+        qr_y - 35,
+        qr_size + 20,
+        qr_size + 55
+    )
+
+    # QR IMAGE
     pdf.drawImage(
-        qr_path,
-        width - 180,
-        80,
-        width=100,
-        height=100
+        ImageReader(qr_path),
+        qr_x,
+        qr_y,
+        width=qr_size,
+        height=qr_size,
+        preserveAspectRatio=True,
+        anchor="sw",
+        mask="auto"
     )
 
-    # -----------------------------------------------------
-    # FOOTER
-    # -----------------------------------------------------
+    # QR LABEL
+    pdf.setFont(
+        "Helvetica-Bold",
+        9
+    )
 
-    pdf.setFont("Helvetica", 9)
+    pdf.drawCentredString(
+        qr_x + qr_size / 2,
+        qr_y - 18,
+        "SCAN TO VERIFY"
+    )
+
+    # =====================================================
+    # VERIFICATION URL
+    # =====================================================
+
+    pdf.setFont(
+        "Helvetica",
+        7
+    )
+
+    # Short URL shown on certificate
+    pdf.drawCentredString(
+        qr_x + qr_size / 2,
+        qr_y - 29,
+        f"{FRONTEND_URL}/verify/"
+    )
+
+    # =====================================================
+    # RESULT
+    # =====================================================
+
+    pdf.setFont(
+        "Helvetica-Bold",
+        14
+    )
+
+    pdf.drawString(
+        70,
+        150,
+        f"VERIFICATION RESULT: {inspection.result}"
+    )
+
+    # =====================================================
+    # FOOTER
+    # =====================================================
+
+    pdf.setFont(
+        "Helvetica",
+        8
+    )
 
     pdf.drawString(
         60,
@@ -285,13 +456,27 @@ def generate_certificate(
     pdf.save()
 
     # =====================================================
+    # CHECK PDF
+    # =====================================================
+
+    if not os.path.exists(pdf_path):
+        raise HTTPException(
+            status_code=500,
+            detail="Certificate PDF could not be generated"
+        )
+
+    # =====================================================
     # DATABASE RECORD
     # =====================================================
 
     certificate = Certificate(
         certificate_number=certificate_number,
-        verification_request_id=verification_request_id,
+
+        verification_request_id=
+            verification_request_id,
+
         certificate_file=pdf_path,
+
         qr_code=qr_path
     )
 
@@ -306,22 +491,42 @@ def generate_certificate(
     # =====================================================
 
     return {
-        "message": "Certificate generated successfully",
-        "certificate_id": certificate.id,
-        "certificate_number": certificate.certificate_number,
-        "verification_request_id": certificate.verification_request_id,
-        "inspection_id": inspection.id,
-        "result": inspection.result,
-        "certificate_file": certificate.certificate_file,
-        "qr_code": certificate.qr_code,
-        "verification_url": verification_url,
-        "issued_at": certificate.issued_at
+        "message":
+            "Certificate generated successfully",
+
+        "certificate_id":
+            certificate.id,
+
+        "certificate_number":
+            certificate.certificate_number,
+
+        "verification_request_id":
+            certificate.verification_request_id,
+
+        "inspection_id":
+            inspection.id,
+
+        "result":
+            inspection.result,
+
+        "certificate_file":
+            certificate.certificate_file,
+
+        "qr_code":
+            certificate.qr_code,
+
+        "verification_url":
+            verification_url,
+
+        "issued_at":
+            certificate.issued_at
     }
 
 
 # =========================================================
 # VERIFY CERTIFICATE
-# IMPORTANT: KEEP BEFORE /{certificate_number}
+# IMPORTANT:
+# KEEP BEFORE /{certificate_number}
 # =========================================================
 
 @router.get("/verify/{certificate_number}")
@@ -347,12 +552,23 @@ def verify_certificate(
 
     return {
         "verified": True,
+
         "status": "VALID",
-        "certificate_number": certificate.certificate_number,
-        "certificate_id": certificate.id,
-        "verification_request_id": certificate.verification_request_id,
-        "issued_at": certificate.issued_at,
-        "valid_until": certificate.valid_until
+
+        "certificate_number":
+            certificate.certificate_number,
+
+        "certificate_id":
+            certificate.id,
+
+        "verification_request_id":
+            certificate.verification_request_id,
+
+        "issued_at":
+            certificate.issued_at,
+
+        "valid_until":
+            certificate.valid_until
     }
 
 
@@ -387,7 +603,9 @@ def download_certificate(
             detail="Certificate PDF not available"
         )
 
-    if not os.path.exists(certificate.certificate_file):
+    if not os.path.exists(
+        certificate.certificate_file
+    ):
         raise HTTPException(
             status_code=404,
             detail="Certificate PDF file not found"
@@ -395,14 +613,19 @@ def download_certificate(
 
     return FileResponse(
         path=certificate.certificate_file,
+
         media_type="application/pdf",
-        filename=f"{certificate.certificate_number}.pdf"
+
+        filename=(
+            f"{certificate.certificate_number}.pdf"
+        )
     )
 
 
 # =========================================================
 # GET CERTIFICATE DETAILS
-# IMPORTANT: KEEP THIS LAST
+# IMPORTANT:
+# KEEP THIS LAST
 # =========================================================
 
 @router.get("/{certificate_number}")
@@ -427,12 +650,27 @@ def get_certificate(
         )
 
     return {
-        "certificate_id": certificate.id,
-        "certificate_number": certificate.certificate_number,
-        "verification_request_id": certificate.verification_request_id,
-        "certificate_file": certificate.certificate_file,
-        "qr_code": certificate.qr_code,
-        "issued_at": certificate.issued_at,
-        "valid_until": certificate.valid_until,
-        "status": "VALID"
+        "certificate_id":
+            certificate.id,
+
+        "certificate_number":
+            certificate.certificate_number,
+
+        "verification_request_id":
+            certificate.verification_request_id,
+
+        "certificate_file":
+            certificate.certificate_file,
+
+        "qr_code":
+            certificate.qr_code,
+
+        "issued_at":
+            certificate.issued_at,
+
+        "valid_until":
+            certificate.valid_until,
+
+        "status":
+            "VALID"
     }

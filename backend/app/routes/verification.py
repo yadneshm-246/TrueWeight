@@ -25,15 +25,12 @@ def create_verification_request(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-
-    # Only shopkeepers can request verification
     if current_user["role"] != "SHOPKEEPER":
         raise HTTPException(
             status_code=403,
             detail="Only shopkeepers can request verification"
         )
 
-    # Check instrument exists
     instrument = (
         db.query(Instrument)
         .filter(Instrument.id == instrument_id)
@@ -46,14 +43,12 @@ def create_verification_request(
             detail="Instrument not found"
         )
 
-    # Check instrument belongs to current shopkeeper
     if instrument.owner_id != current_user["user_id"]:
         raise HTTPException(
             status_code=403,
             detail="You do not own this instrument"
         )
 
-    # Check if there is already a pending request
     existing_request = (
         db.query(VerificationRequest)
         .filter(
@@ -69,10 +64,7 @@ def create_verification_request(
             detail="A verification request is already pending for this instrument"
         )
 
-    # Create application ID
-    application_id = (
-        "TW-" + uuid.uuid4().hex[:8].upper()
-    )
+    application_id = "TW-" + uuid.uuid4().hex[:8].upper()
 
     verification_request = VerificationRequest(
         application_id=application_id,
@@ -103,8 +95,6 @@ def get_verification_requests(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-
-    # Only inspectors can view all requests
     if current_user["role"] != "INSPECTOR":
         raise HTTPException(
             status_code=403,
@@ -180,8 +170,6 @@ def get_my_verification_requests(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-
-    # Only shopkeepers can view their own requests
     if current_user["role"] != "SHOPKEEPER":
         raise HTTPException(
             status_code=403,
@@ -256,7 +244,6 @@ def get_verification_request(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-
     request = (
         db.query(VerificationRequest)
         .filter(
@@ -279,16 +266,19 @@ def get_verification_request(
         .first()
     )
 
-    # Shopkeeper can only see own request
+    # SHOPKEEPER → only own instrument
     if current_user["role"] == "SHOPKEEPER":
 
-        if not instrument or instrument.owner_id != current_user["user_id"]:
+        if (
+            not instrument
+            or instrument.owner_id != current_user["user_id"]
+        ):
             raise HTTPException(
                 status_code=403,
                 detail="You do not have access to this request"
             )
 
-    # Inspector can see requests
+    # INSPECTOR → allowed
     elif current_user["role"] != "INSPECTOR":
 
         raise HTTPException(
