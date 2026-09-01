@@ -2125,7 +2125,6 @@ if (isPublicVerifyPage) {
           </section>
 
           {/* MY CERTIFICATES */}
-
           <section className="verify-card">
             <h2>
               📜 My Certificates

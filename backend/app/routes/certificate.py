@@ -575,6 +575,92 @@ def verify_certificate(
 # =========================================================
 # DOWNLOAD CERTIFICATE PDF
 # =========================================================
+# =========================================================
+# GET MY CERTIFICATES
+# IMPORTANT:
+# KEEP THIS BEFORE /{certificate_number}
+# =========================================================
+
+@router.get("/my")
+def get_my_certificates(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+
+    # =====================================================
+    # ONLY SHOPKEEPER
+    # =====================================================
+
+    if current_user["role"] != "SHOPKEEPER":
+        raise HTTPException(
+            status_code=403,
+            detail="Only shopkeepers can view their certificates"
+        )
+
+    # =====================================================
+    # GET SHOPKEEPER USER ID
+    # =====================================================
+
+    user_id = current_user["user_id"]
+
+    # =====================================================
+    # CERTIFICATE
+    # → VERIFICATION REQUEST
+    # → INSTRUMENT
+    # → INSTRUMENT OWNER
+    # =====================================================
+
+    certificates = (
+        db.query(Certificate)
+        .join(
+            VerificationRequest,
+            Certificate.verification_request_id
+            == VerificationRequest.id
+        )
+        .join(
+            Instrument,
+            VerificationRequest.instrument_id
+            == Instrument.id
+        )
+        .filter(
+            Instrument.owner_id == user_id
+        )
+        .all()
+    )
+
+    # =====================================================
+    # RESPONSE
+    # =====================================================
+
+    return [
+        {
+            "certificate_id": certificate.id,
+
+            "certificate_number":
+                certificate.certificate_number,
+
+            "verification_request_id":
+                certificate.verification_request_id,
+
+            "certificate_file":
+                certificate.certificate_file,
+
+            "qr_code":
+                certificate.qr_code,
+
+            "issued_at":
+                certificate.issued_at,
+
+            "valid_until":
+                certificate.valid_until,
+
+            "status":
+                "VALID"
+        }
+        for certificate in certificates
+    ]
+
+
 
 @router.get("/{certificate_number}/pdf")
 def download_certificate(
