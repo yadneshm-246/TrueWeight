@@ -41,7 +41,7 @@ os.makedirs(QR_DIR, exist_ok=True)
 # FRONTEND URL
 # =========================================================
 
-FRONTEND_URL = "http://10.23.93.59:5173"
+FRONTEND_URL = "http://192.168.29.127:5173"
 
 # =========================================================
 # GENERATE CERTIFICATE
