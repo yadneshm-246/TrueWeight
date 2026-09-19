@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./index.css";
 
-const BACKEND_URL = "http://10.23.93.59:8000";
+const BACKEND_URL = "https://trueweight.onrender.com";
 
 const ERROR_LIMIT_G = 50;
 const ERROR_LIMIT_KG = 0.05;
