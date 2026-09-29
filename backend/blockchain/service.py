@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
-from web3 import Web3
 
+from web3 import Web3
 
 
 RPC_URL = os.getenv("BLOCKCHAIN_RPC_URL")

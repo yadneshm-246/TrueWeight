@@ -64,6 +64,18 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // =====================================================
+  // MERCHANT REGISTRATION
+  // =====================================================
+
+  const [registerName, setRegisterName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [registerError, setRegisterError] = useState("");
+  const [registerSuccess, setRegisterSuccess] = useState("");
+  const [registerLoading, setRegisterLoading] = useState(false);
+
   const [token, setToken] = useState(
     localStorage.getItem("trueweight_token") || ""
   );
@@ -283,6 +295,94 @@ function App() {
       setLoginError(error.message || "Failed to login");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // =====================================================
+  // MERCHANT REGISTRATION
+  // =====================================================
+
+  const registerMerchant = async () => {
+    const name = registerName.trim();
+    const registrationEmail = registerEmail.trim();
+
+    if (!name || !registrationEmail || !registerPassword || !registerConfirmPassword) {
+      setRegisterError("Please fill in all fields.");
+      setRegisterSuccess("");
+      return;
+    }
+
+    if (registerPassword.length < 6) {
+      setRegisterError("Password must be at least 6 characters long.");
+      setRegisterSuccess("");
+      return;
+    }
+
+    if (registerPassword !== registerConfirmPassword) {
+      setRegisterError("Passwords do not match.");
+      setRegisterSuccess("");
+      return;
+    }
+
+    setRegisterLoading(true);
+    setRegisterError("");
+    setRegisterSuccess("");
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email: registrationEmail,
+          password: registerPassword,
+          role: "SHOPKEEPER",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        let message = "Registration failed.";
+
+        if (Array.isArray(data.detail)) {
+          message = data.detail
+            .map((item) => item.msg || "Invalid input")
+            .join("; " );
+        } else if (typeof data.detail === "string") {
+          message = data.detail;
+        } else if (data.message) {
+          message = data.message;
+        }
+
+        throw new Error(message);
+      }
+
+      setRegisterSuccess(
+        "Account created successfully. You can now login."
+      );
+
+      setEmail(registrationEmail);
+      setPassword("");
+      setRegisterName("");
+      setRegisterEmail("");
+      setRegisterPassword("");
+      setRegisterConfirmPassword("");
+
+      window.setTimeout(() => {
+        setPage("login");
+        setRegisterSuccess("");
+        setLoginError("");
+      }, 700);
+    } catch (error) {
+      console.error("Registration error:", error);
+      setRegisterError(
+        error.message || "Failed to create account."
+      );
+    } finally {
+      setRegisterLoading(false);
     }
   };
 
@@ -1837,6 +1937,170 @@ if (isPublicVerifyPage) {
                 </span>
               </button>
             </div>
+
+            <div className="register-prompt">
+              <p className="card-description">
+                New merchant? Create your account to register weighing instruments.
+              </p>
+
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  setRegisterName("");
+                  setRegisterEmail("");
+                  setRegisterPassword("");
+                  setRegisterConfirmPassword("");
+                  setRegisterError("");
+                  setRegisterSuccess("");
+                  setPage("register");
+                }}
+              >
+                📝 Create Merchant Account
+              </button>
+            </div>
+          </section>
+        </main>
+
+        <footer>
+          © 2026 TrueWeight Verification Platform
+        </footer>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // MERCHANT REGISTRATION PAGE
+  // =====================================================
+
+  if (page === "register") {
+    return (
+      <div className="app">
+        <header className="navbar">
+          <div className="logo">
+            TRUE<span>WEIGHT</span>
+          </div>
+
+          <div className="nav-status">
+            Merchant Registration
+          </div>
+        </header>
+
+        <main className="container">
+          <section className="hero">
+            <div className="badge">
+              📝 CREATE ACCOUNT
+            </div>
+
+            <h1>Create Merchant Account</h1>
+
+            <p>
+              Register as a merchant to add your weighing instruments
+              and submit verification requests.
+            </p>
+          </section>
+
+          <section className="verify-card">
+            <h2>Merchant Registration</h2>
+
+            <p className="card-description">
+              Create your TrueWeight merchant account.
+            </p>
+
+            <div className="form-group">
+              <label>Full Name</label>
+              <input
+                type="text"
+                placeholder="Enter your full name"
+                value={registerName}
+                onChange={(e) => {
+                  setRegisterName(e.target.value);
+                  setRegisterError("");
+                }}
+              />
+
+              <label>Email</label>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                value={registerEmail}
+                onChange={(e) => {
+                  setRegisterEmail(e.target.value);
+                  setRegisterError("");
+                }}
+              />
+
+              <label>Password</label>
+              <input
+                type="password"
+                placeholder="Create a password"
+                value={registerPassword}
+                onChange={(e) => {
+                  setRegisterPassword(e.target.value);
+                  setRegisterError("");
+                }}
+              />
+
+              <label>Confirm Password</label>
+              <input
+                type="password"
+                placeholder="Re-enter your password"
+                value={registerConfirmPassword}
+                onChange={(e) => {
+                  setRegisterConfirmPassword(e.target.value);
+                  setRegisterError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    registerMerchant();
+                  }
+                }}
+              />
+            </div>
+
+            {registerError && (
+              <div className="error-box">
+                ❌ {registerError}
+              </div>
+            )}
+
+            {registerSuccess && (
+              <div className="security-message">
+                ✅ {registerSuccess}
+              </div>
+            )}
+
+            <button
+              className="login-button"
+              onClick={registerMerchant}
+              disabled={registerLoading}
+            >
+              {registerLoading
+                ? "Creating Account..."
+                : "📝 Create Account"}
+            </button>
+
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setRegisterError("");
+                setRegisterSuccess("");
+                setPage("role-select");
+              }}
+            >
+              ← Back to Login Selection
+            </button>
+
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setRegisterError("");
+                setRegisterSuccess("");
+                setSelectedRole("SHOPKEEPER");
+                setPage("login");
+              }}
+            >
+              Already have an account? Login
+            </button>
           </section>
         </main>
 
