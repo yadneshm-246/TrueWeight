@@ -1393,7 +1393,99 @@ def generate_certificate(
         ),
     }
 
+# =========================================================
+# MERCHANT MY CERTIFICATES
+# =========================================================
 
+@router.get("/my")
+def get_my_certificates(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    # Only merchants can access their own certificates
+    if current_user["role"] != "SHOPKEEPER":
+        raise HTTPException(
+            status_code=403,
+            detail="Only shopkeepers can view their certificates",
+        )
+
+    merchant_id = current_user["user_id"]
+
+    # Get certificates belonging to instruments owned by this merchant
+    certificates = (
+        db.query(Certificate)
+        .join(
+            VerificationRequest,
+            VerificationRequest.id
+            == Certificate.verification_request_id,
+        )
+        .join(
+            Instrument,
+            Instrument.id
+            == VerificationRequest.instrument_id,
+        )
+        .filter(
+            Instrument.owner_id == merchant_id
+        )
+        .order_by(
+            Certificate.issued_at.desc()
+        )
+        .all()
+    )
+
+    result = []
+
+    for certificate in certificates:
+        result.append(
+            {
+                "id": certificate.id,
+
+                "certificate_number":
+                    certificate.certificate_number,
+
+                "verification_request_id":
+                    certificate.verification_request_id,
+
+                "issued_at": (
+                    certificate.issued_at.isoformat()
+                    if certificate.issued_at
+                    else None
+                ),
+
+                "valid_until": (
+                    certificate.valid_until.isoformat()
+                    if certificate.valid_until
+                    else None
+                ),
+
+                "status": "VERIFIED",
+
+                "pdf_url": (
+                    f"/certificate/"
+                    f"{certificate.certificate_number}"
+                    f"/pdf"
+                ),
+
+                "verification_url": (
+                    f"/certificate/verify/"
+                    f"{certificate.certificate_number}"
+                ),
+
+                "blockchain_status": getattr(
+                    certificate,
+                    "blockchain_status",
+                    None,
+                ),
+
+                "blockchain_tx_hash": getattr(
+                    certificate,
+                    "blockchain_tx_hash",
+                    None,
+                ),
+            }
+        )
+
+    return result
 # =========================================================
 # DOWNLOAD CERTIFICATE PDF
 # =========================================================
