@@ -1,15 +1,13 @@
 from fastapi import FastAPI
-from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
-
-from app.routes.instrument import router as instrument_router
-from app.auth.routes import router as auth_router
-from app.routes.verification import router as verification_router
-from app.routes.inspection import router as inspection_router
-from app.routes.evidence import router as evidence_router
-from app.routes.certificate import router as certificate_router
+from sqlalchemy import text
 
 from app.database import engine, Base
+
+
+# =========================================================
+# MODELS
+# =========================================================
 
 from app.models import (
     User,
@@ -19,6 +17,22 @@ from app.models import (
     Evidence,
     Certificate,
 )
+
+
+# =========================================================
+# ROUTES
+# =========================================================
+
+from app.auth.routes import router as auth_router
+
+from app.routes.instrument import router as instrument_router
+from app.routes.verification import router as verification_router
+from app.routes.inspection import router as inspection_router
+from app.routes.evidence import router as evidence_router
+from app.routes.certificate import router as certificate_router
+
+# Officer dashboard
+from app.routes.officer import router as officer_router
 
 
 # =========================================================
@@ -49,6 +63,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://192.168.29.48:5173",
         "http://10.23.93.59:5173",
     ],
 
@@ -76,6 +91,8 @@ app.include_router(evidence_router)
 
 app.include_router(certificate_router)
 
+app.include_router(officer_router)
+
 
 # =========================================================
 # HOME
@@ -97,13 +114,23 @@ def home():
 @app.get("/db-test")
 def database_test():
 
-    with engine.connect() as connection:
+    try:
 
-        result = connection.execute(
-            text("SELECT 1")
-        )
+        with engine.connect() as connection:
+
+            result = connection.execute(
+                text("SELECT 1")
+            )
+
+            return {
+                "database": "connected",
+                "result": result.scalar()
+            }
+
+    except Exception as e:
 
         return {
-            "database": "connected",
-            "result": result.scalar()
+            "database": "connection failed",
+            "status": "error",
+            "detail": str(e)
         }

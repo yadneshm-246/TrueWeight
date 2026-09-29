@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import LiveLocationMap from "./LiveLocationMap";
+import { useCallback, useEffect, useState } from "react";
 import "./index.css";
-
+import "leaflet/dist/leaflet.css";
 const BACKEND_URL = "http://192.168.29.48:8000";
 
 const ERROR_LIMIT_G = 50;
@@ -51,7 +52,12 @@ function App() {
   // =====================================================
   // PAGE / AUTH
   // =====================================================
+  const [inspectionLocation, setInspectionLocation] =
+  useState(null);
 
+  const handleLocationChange = useCallback((location) => {
+    setInspectionLocation(location);
+  }, []);
   const [page, setPage] = useState("role-select");
   const [selectedRole, setSelectedRole] = useState("");
 
@@ -63,6 +69,22 @@ function App() {
   );
 
   const [user, setUser] = useState(null);
+
+  // =====================================================
+  // OFFICER CASE MANAGEMENT
+  // =====================================================
+
+  const [officerCases, setOfficerCases] = useState([]);
+  const [officerCasesLoading, setOfficerCasesLoading] = useState(false);
+  const [officerCasesError, setOfficerCasesError] = useState("");
+  const [selectedOfficerCase, setSelectedOfficerCase] = useState(null);
+  const [officerCaseLoading, setOfficerCaseLoading] = useState(false);
+  const [officerCaseError, setOfficerCaseError] = useState("");
+
+  // Officer evidence preview
+  const [evidencePreview, setEvidencePreview] = useState(null);
+  const [evidencePreviewLoading, setEvidencePreviewLoading] = useState(false);
+  const [evidencePreviewError, setEvidencePreviewError] = useState("");
 
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -112,6 +134,17 @@ function App() {
   const [inspectionLoading, setInspectionLoading] = useState(false);
   const [inspectionError, setInspectionError] = useState("");
   const [inspectionResult, setInspectionResult] = useState(null);
+
+  // =====================================================
+  // PHYSICAL INSPECTION EVIDENCE
+  // =====================================================
+
+  const [machinePhoto, setMachinePhoto] = useState(null);
+  const [readingPhoto, setReadingPhoto] = useState(null);
+  const [inspectionVideo, setInspectionVideo] = useState(null);
+
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
 
   // =====================================================
   // CERTIFICATES
@@ -173,6 +206,9 @@ function App() {
       } else if (data.role === "SHOPKEEPER") {
         setSelectedRole("SHOPKEEPER");
         setPage("merchant-dashboard");
+      } else if (data.role === "OFFICER") {
+        setSelectedRole("OFFICER");
+        setPage("officer-dashboard");
       } else {
         logout();
       }
@@ -638,6 +674,159 @@ function App() {
   };
 
   // =====================================================
+  // OFFICER DASHBOARD
+  // =====================================================
+
+  const loadOfficerCases = async () => {
+    if (!token) return;
+
+    setOfficerCasesLoading(true);
+    setOfficerCasesError("");
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/officer/dashboard`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Failed to load officer cases"
+        );
+      }
+
+      const cases =
+        Array.isArray(data)
+          ? data
+          : Array.isArray(data.cases)
+          ? data.cases
+          : [];
+
+      setOfficerCases(cases);
+    } catch (error) {
+      console.error("Officer cases error:", error);
+      setOfficerCasesError(
+        error.message || "Failed to load officer cases"
+      );
+    } finally {
+      setOfficerCasesLoading(false);
+    }
+  };
+
+  const openOfficerCase = async (requestId) => {
+    if (!requestId) return;
+
+    setSelectedOfficerCase(null);
+    setOfficerCaseError("");
+    setOfficerCaseLoading(true);
+    setPage("officer-case-detail");
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/officer/cases/${requestId}`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Failed to load case details"
+        );
+      }
+
+      setSelectedOfficerCase(data);
+    } catch (error) {
+      console.error("Officer case detail error:", error);
+      setOfficerCaseError(
+        error.message || "Failed to load case details"
+      );
+    } finally {
+      setOfficerCaseLoading(false);
+    }
+  };
+
+  const previewEvidence = async (item) => {
+    if (!item?.id) return;
+
+    setEvidencePreviewLoading(true);
+    setEvidencePreviewError("");
+
+    if (evidencePreview?.url) {
+      URL.revokeObjectURL(evidencePreview.url);
+    }
+    setEvidencePreview(null);
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/evidence/${item.id}/file`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        let message = `Failed to open evidence (${response.status})`;
+        try {
+          const data = await response.json();
+          message = data.detail || data.message || message;
+        } catch {
+          // Non-JSON error response
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      setEvidencePreview({
+        id: item.id,
+        type: item.type,
+        fileName: item.file_name,
+        contentType: item.content_type || blob.type,
+        url,
+      });
+    } catch (error) {
+      console.error("Evidence preview error:", error);
+      setEvidencePreviewError(
+        error.message || "Unable to open evidence file."
+      );
+    } finally {
+      setEvidencePreviewLoading(false);
+    }
+  };
+
+  const closeEvidencePreview = () => {
+    if (evidencePreview?.url) {
+      URL.revokeObjectURL(evidencePreview.url);
+    }
+    setEvidencePreview(null);
+    setEvidencePreviewError("");
+  };
+
+  const closeOfficerCase = () => {
+    closeEvidencePreview();
+    setSelectedOfficerCase(null);
+    setOfficerCaseError("");
+    setPage("officer-dashboard");
+    loadOfficerCases();
+  };
+
+  // =====================================================
   // LOAD DASHBOARD DATA
   // =====================================================
 
@@ -659,7 +848,35 @@ function App() {
       loadMyRequests();
       loadMerchantCertificates();
     }
+
+    if (
+      page === "officer-dashboard" &&
+      token &&
+      user?.role === "OFFICER"
+    ) {
+      loadOfficerCases();
+    }
   }, [page, token, user]);
+
+  // Keep the Officer dashboard live. When an inspector completes
+  // an inspection, the Officer sees the new status automatically.
+  useEffect(() => {
+    if (
+      page !== "officer-dashboard" ||
+      !token ||
+      user?.role !== "OFFICER"
+    ) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) {
+        loadOfficerCases();
+      }
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [page, token, user?.role]);
 
   // =====================================================
   // OPEN INSPECTION
@@ -674,6 +891,13 @@ function App() {
     setMachineReading("");
 
     setRemarks("");
+    setInspectionLocation(null);
+
+    setMachinePhoto(null);
+    setReadingPhoto(null);
+    setInspectionVideo(null);
+    setEvidenceLoading(false);
+    setEvidenceError("");
 
     setInspectionError("");
     setInspectionResult(null);
@@ -700,12 +924,115 @@ function App() {
     setMachineReading("");
 
     setRemarks("");
+    setInspectionLocation(null);
+
+    setMachinePhoto(null);
+    setReadingPhoto(null);
+    setInspectionVideo(null);
+    setEvidenceLoading(false);
+    setEvidenceError("");
 
     setInspectionError("");
     setInspectionResult(null);
 
     setCertificateResult(null);
     setCertificateError("");
+  };
+
+  // =====================================================
+  // UPLOAD INSPECTION EVIDENCE
+  // =====================================================
+
+  const uploadEvidence = async (
+    inspectionId,
+    evidenceType,
+    selectedFile,
+    location = inspectionLocation
+  ) => {
+    if (!selectedFile) {
+      return null;
+    }
+
+    const formData = new FormData();
+
+    formData.append(
+      "inspection_id",
+      String(inspectionId)
+    );
+
+    formData.append(
+      "evidence_type",
+      evidenceType
+    );
+
+    formData.append(
+      "file",
+      selectedFile
+    );
+
+    if (
+      location &&
+      location.latitude != null &&
+      location.longitude != null
+    ) {
+      formData.append(
+        "latitude",
+        String(location.latitude)
+      );
+      formData.append(
+        "longitude",
+        String(location.longitude)
+      );
+
+      if (
+        location.altitude !== null &&
+        location.altitude !== undefined
+      ) {
+        formData.append(
+          "altitude",
+          String(location.altitude)
+        );
+      }
+
+      if (
+        location.accuracy !== null &&
+        location.accuracy !== undefined
+      ) {
+        formData.append(
+          "location_accuracy",
+          String(location.accuracy)
+        );
+      }
+
+      if (location.timestamp) {
+        formData.append(
+          "location_timestamp",
+          location.timestamp
+        );
+      }
+    }
+
+    const response = await fetch(
+      `${BACKEND_URL}/evidence/upload`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail ||
+          `Failed to upload ${evidenceType}`
+      );
+    }
+
+    return data;
   };
 
   // =====================================================
@@ -717,12 +1044,38 @@ function App() {
       return;
     }
 
+    if (!machinePhoto) {
+      setInspectionError(
+        "Please upload the machine photo."
+      );
+      return;
+    }
+
+    if (!readingPhoto) {
+      setInspectionError(
+        "Please upload the machine reading photo."
+      );
+      return;
+    }
+
     if (
       standardWeight === "" ||
       machineReading === ""
     ) {
       setInspectionError(
         "Please enter standard weight and machine reading."
+      );
+      return;
+    }
+
+    // GPS is part of the inspection audit record.
+    if (
+      !inspectionLocation ||
+      inspectionLocation.latitude == null ||
+      inspectionLocation.longitude == null
+    ) {
+      setInspectionError(
+        "GPS location is required. Please allow location access and wait until the live GPS location is shown before submitting the inspection."
       );
       return;
     }
@@ -809,6 +1162,45 @@ function App() {
         );
       }
 
+      // =================================================
+      // INSPECTOR GPS LOCATION
+      // =================================================
+
+      if (inspectionLocation) {
+        params.append(
+          "latitude",
+          String(inspectionLocation.latitude)
+        );
+
+        params.append(
+          "longitude",
+          String(inspectionLocation.longitude)
+        );
+
+        if (inspectionLocation.altitude !== null &&
+            inspectionLocation.altitude !== undefined) {
+          params.append(
+            "altitude",
+            String(inspectionLocation.altitude)
+          );
+        }
+
+        if (inspectionLocation.accuracy !== null &&
+            inspectionLocation.accuracy !== undefined) {
+          params.append(
+            "location_accuracy",
+            String(inspectionLocation.accuracy)
+          );
+        }
+
+        if (inspectionLocation.timestamp) {
+          params.append(
+            "location_timestamp",
+            inspectionLocation.timestamp
+          );
+        }
+      }
+
       const response = await fetch(
         `${BACKEND_URL}/inspection/?${params.toString()}`,
         {
@@ -845,6 +1237,45 @@ function App() {
 
         result: data.result || automaticResult,
       });
+
+      // Upload physical evidence after the inspection
+      // record has been created successfully.
+      try {
+        setEvidenceLoading(true);
+        setEvidenceError("");
+
+        await uploadEvidence(
+          data.inspection_id,
+          "MACHINE_PHOTO",
+          machinePhoto
+        );
+
+        await uploadEvidence(
+          data.inspection_id,
+          "READING_PHOTO",
+          readingPhoto
+        );
+
+        if (inspectionVideo) {
+          await uploadEvidence(
+            data.inspection_id,
+            "INSPECTION_VIDEO",
+            inspectionVideo
+          );
+        }
+      } catch (evidenceUploadError) {
+        console.error(
+          "Evidence upload error:",
+          evidenceUploadError
+        );
+
+        setEvidenceError(
+          evidenceUploadError.message ||
+            "Inspection completed, but evidence upload failed."
+        );
+      } finally {
+        setEvidenceLoading(false);
+      }
 
       await loadRequests();
     } catch (error) {
@@ -1381,6 +1812,30 @@ if (isPublicVerifyPage) {
                   Continue →
                 </span>
               </button>
+
+              <button
+                className="role-card"
+                onClick={() =>
+                  selectRole("OFFICER")
+                }
+              >
+                <div className="role-icon">
+                  🏛️
+                </div>
+
+                <h3>
+                  Officer Login
+                </h3>
+
+                <p>
+                  Review complete verification
+                  cases, evidence and certificates.
+                </p>
+
+                <span>
+                  Continue →
+                </span>
+              </button>
             </div>
           </section>
         </main>
@@ -1400,6 +1855,9 @@ if (isPublicVerifyPage) {
     const isInspector =
       selectedRole === "INSPECTOR";
 
+    const isOfficer =
+      selectedRole === "OFFICER";
+
     return (
       <div className="app">
         <header className="navbar">
@@ -1408,7 +1866,9 @@ if (isPublicVerifyPage) {
           </div>
 
           <div className="nav-status">
-            {isInspector
+            {isOfficer
+              ? "Officer Portal"
+              : isInspector
               ? "Inspector Portal"
               : "Merchant Portal"}
           </div>
@@ -1421,7 +1881,9 @@ if (isPublicVerifyPage) {
             </div>
 
             <h1>
-              {isInspector
+              {isOfficer
+                ? "Officer Login"
+                : isInspector
                 ? "Inspector Login"
                 : "Merchant Login"}
             </h1>
@@ -1434,7 +1896,9 @@ if (isPublicVerifyPage) {
 
           <section className="verify-card">
             <h2>
-              {isInspector
+              {isOfficer
+                ? "Officer Login"
+                : isInspector
                 ? "Inspector Login"
                 : "Merchant Login"}
             </h2>
@@ -1504,6 +1968,723 @@ if (isPublicVerifyPage) {
               ← Back to Login Selection
             </button>
           </section>
+        </main>
+
+        <footer>
+          © 2026 TrueWeight Verification Platform
+        </footer>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // OFFICER DASHBOARD
+  // =====================================================
+
+  if (page === "officer-dashboard") {
+    return (
+      <div className="app">
+        <header className="navbar">
+          <div className="logo">
+            TRUE<span>WEIGHT</span>
+          </div>
+
+          <div className="nav-status">
+            Officer Dashboard
+          </div>
+
+          <button
+            className="logout-button"
+            onClick={logout}
+          >
+            Logout
+          </button>
+        </header>
+
+        <main className="container">
+          <section className="hero">
+            <div className="badge">
+              🏛️ OFFICER
+            </div>
+
+            <h1>Officer Dashboard</h1>
+
+            <p>
+              Review verification cases, inspection
+              records, GPS information, evidence and
+              certificates.
+            </p>
+          </section>
+
+          <section className="verify-card">
+            <h2>
+              👤 Officer Information
+            </h2>
+
+            <div className="details">
+              <div className="detail-row">
+                <span>Name</span>
+                <strong>{user?.name || "Officer"}</strong>
+              </div>
+
+              <div className="detail-row">
+                <span>Email</span>
+                <strong>{user?.email || "N/A"}</strong>
+              </div>
+
+              <div className="detail-row">
+                <span>Role</span>
+                <strong className="valid">
+                  {user?.role || "OFFICER"}
+                </strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="verify-card">
+            <div className="inspection-header">
+              <div>
+                <h2>📋 Verification Cases</h2>
+                <p className="card-description">
+                  Open a case to view its complete
+                  verification record.
+                </p>
+              </div>
+
+              <button
+                className="login-button"
+                onClick={loadOfficerCases}
+                disabled={officerCasesLoading}
+              >
+                {officerCasesLoading
+                  ? "Loading..."
+                  : "🔄 Refresh Cases"}
+              </button>
+            </div>
+
+            {officerCasesError && (
+              <div className="error-box">
+                ❌ {officerCasesError}
+              </div>
+            )}
+
+            {!officerCasesLoading &&
+              !officerCasesError &&
+              officerCases.length === 0 && (
+                <div className="loading-box">
+                  📋 No verification cases found.
+                </div>
+              )}
+
+            {officerCases.map((caseItem, index) => {
+              const requestId =
+                caseItem.verification_request_id ??
+                caseItem.request_id ??
+                caseItem.id;
+
+              const applicationId =
+                caseItem.application_id ||
+                `CASE-${requestId}`;
+
+              const instrument =
+                caseItem.instrument || {};
+
+              return (
+                <div
+                  className="result-card"
+                  key={requestId || index}
+                >
+                  <div className="verified-icon">
+                    {caseItem.status === "VERIFIED"
+                      ? "✓"
+                      : caseItem.status === "REJECTED"
+                      ? "✕"
+                      : "!"}
+                  </div>
+
+                  <h2>{applicationId}</h2>
+
+                  <p className="verified-text">
+                    Verification Case
+                  </p>
+
+                  <div className="details">
+                    <div className="detail-row">
+                      <span>Request ID</span>
+                      <strong>
+                        {requestId || "N/A"}
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>Status</span>
+                      <strong
+                        className={
+                          caseItem.status === "VERIFIED"
+                            ? "valid"
+                            : ""
+                        }
+                      >
+                        {caseItem.status || "PENDING"}
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>Instrument</span>
+                      <strong>
+                        {instrument.instrument_type ||
+                          caseItem.instrument_type ||
+                          "N/A"}
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>Unique ID</span>
+                      <strong>
+                        {instrument.unique_id ||
+                          caseItem.unique_id ||
+                          "N/A"}
+                      </strong>
+                    </div>
+
+                    <div className="detail-row">
+                      <span>Manufacturer</span>
+                      <strong>
+                        {instrument.manufacturer ||
+                          caseItem.manufacturer ||
+                          "N/A"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <button
+                    className="login-button"
+                    onClick={() =>
+                      openOfficerCase(requestId)
+                    }
+                    disabled={!requestId}
+                  >
+                    🔎 View Complete Case
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+        </main>
+
+        <footer>
+          © 2026 TrueWeight Verification Platform
+        </footer>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // OFFICER CASE DETAIL
+  // =====================================================
+
+  if (page === "officer-case-detail") {
+    const c = selectedOfficerCase;
+    const inspection = c?.inspection;
+    const location = inspection?.location;
+    const instrument = c?.instrument;
+    const merchant = c?.merchant;
+    const inspector = c?.inspector;
+    const certificate = c?.certificate;
+    const evidence = c?.evidence || [];
+
+    return (
+      <div className="app">
+        <header className="navbar">
+          <div className="logo">
+            TRUE<span>WEIGHT</span>
+          </div>
+
+          <div className="nav-status">
+            Case Detail
+          </div>
+
+          <button
+            className="logout-button"
+            onClick={logout}
+          >
+            Logout
+          </button>
+        </header>
+
+        <main className="container">
+          <section className="hero">
+            <div className="badge">
+              🔎 CASE AUDIT
+            </div>
+
+            <h1>Complete Case Detail</h1>
+
+            <p>
+              Full verification record for officer
+              review.
+            </p>
+          </section>
+
+          <button
+            className="secondary-button"
+            onClick={closeOfficerCase}
+          >
+            ← Back to Officer Dashboard
+          </button>
+
+          {officerCaseLoading && (
+            <section className="verify-card">
+              <div className="loading-box">
+                ⏳ Loading complete case...
+              </div>
+            </section>
+          )}
+
+          {officerCaseError && (
+            <section className="verify-card">
+              <div className="error-box">
+                ❌ {officerCaseError}
+              </div>
+            </section>
+          )}
+
+          {c && (
+            <>
+              <section className="verify-card">
+                <h2>📋 Verification Request</h2>
+                <div className="details">
+                  <div className="detail-row">
+                    <span>Application ID</span>
+                    <strong>
+                      {c.verification_request?.application_id ||
+                        "N/A"}
+                    </strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Request ID</span>
+                    <strong>
+                      {c.verification_request?.id || "N/A"}
+                    </strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Status</span>
+                    <strong className={
+                      c.verification_request?.status === "VERIFIED"
+                        ? "valid"
+                        : ""
+                    }>
+                      {c.verification_request?.status || "N/A"}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="verify-card">
+                <h2>🏪 Merchant Details</h2>
+                <div className="details">
+                  <div className="detail-row">
+                    <span>Name</span>
+                    <strong>{merchant?.name || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Email</span>
+                    <strong>{merchant?.email || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>User ID</span>
+                    <strong>{merchant?.id || "N/A"}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="verify-card">
+                <h2>⚖️ Instrument Details</h2>
+                <div className="details">
+                  <div className="detail-row">
+                    <span>Unique ID</span>
+                    <strong>{instrument?.unique_id || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Type</span>
+                    <strong>{instrument?.instrument_type || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Manufacturer</span>
+                    <strong>{instrument?.manufacturer || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Model</span>
+                    <strong>{instrument?.model || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Serial Number</span>
+                    <strong>{instrument?.serial_number || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Capacity</span>
+                    <strong>{instrument?.capacity || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Location</span>
+                    <strong>{instrument?.location || "N/A"}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="verify-card">
+                <h2>👨‍🔧 Inspector Details</h2>
+                <div className="details">
+                  <div className="detail-row">
+                    <span>Name</span>
+                    <strong>{inspector?.name || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Email</span>
+                    <strong>{inspector?.email || "N/A"}</strong>
+                  </div>
+                  <div className="detail-row">
+                    <span>Inspector ID</span>
+                    <strong>{inspector?.id || "N/A"}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="verify-card">
+                <h2>🔍 Inspection Details</h2>
+
+                {!inspection && (
+                  <div className="loading-box">
+                    No inspection has been recorded yet.
+                  </div>
+                )}
+
+                {inspection && (
+                  <>
+                    <div className="details">
+                      <div className="detail-row">
+                        <span>Standard Weight</span>
+                        <strong>
+                          {inspection.standard_weight} kg
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Machine Reading</span>
+                        <strong>
+                          {inspection.machine_reading} kg
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Calculated Error</span>
+                        <strong>
+                          {formatError(
+                            inspection.calculated_error
+                          )}
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Permissible Error</span>
+                        <strong>
+                          ±{inspection.permissible_error} kg
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Result</span>
+                        <strong className={
+                          inspection.result === "PASS"
+                            ? "valid"
+                            : ""
+                        }>
+                          {inspection.result}
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Remarks</span>
+                        <strong>
+                          {inspection.remarks || "No remarks"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="security-message">
+                      {inspection.result === "PASS"
+                        ? "✅ Inspection passed."
+                        : "❌ Inspection failed."}
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section className="verify-card">
+                <h2>📍 Inspection GPS Location</h2>
+
+                {location?.latitude != null &&
+                location?.longitude != null ? (
+                  <>
+                    <div className="details">
+                      <div className="detail-row">
+                        <span>Latitude</span>
+                        <strong>{location.latitude}</strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Longitude</span>
+                        <strong>{location.longitude}</strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Accuracy</span>
+                        <strong>
+                          {location.accuracy != null
+                            ? `${location.accuracy} m`
+                            : "N/A"}
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Altitude</span>
+                        <strong>
+                          {location.altitude != null
+                            ? `${location.altitude} m`
+                            : "N/A"}
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Timestamp</span>
+                        <strong>
+                          {location.timestamp
+                            ? new Date(
+                                location.timestamp
+                              ).toLocaleString()
+                            : "N/A"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: "18px",
+                        padding: "14px",
+                        borderRadius: "10px",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      <a
+                        href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        📍 Open inspection location in Google Maps
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <div className="loading-box">
+                    📍 GPS location was not recorded for this
+                    inspection.
+                  </div>
+                )}
+              </section>
+
+              <section className="verify-card">
+                <div className="inspection-header">
+                  <div>
+                    <h2>📷 Evidence</h2>
+                    <p className="card-description">
+                      Physical photos and videos uploaded by the inspector.
+                    </p>
+                  </div>
+                </div>
+
+                {evidence.length === 0 ? (
+                  <div className="loading-box">
+                    No evidence records found.
+                  </div>
+                ) : (
+                  evidence.map((item) => (
+                    <div
+                      className="result-card"
+                      key={item.id}
+                    >
+                      <h3>{item.type}</h3>
+
+                      <div className="details">
+                        <div className="detail-row">
+                          <span>File</span>
+                          <strong>{item.file_name}</strong>
+                        </div>
+
+                        <div className="detail-row">
+                          <span>Content Type</span>
+                          <strong>{item.content_type || "N/A"}</strong>
+                        </div>
+
+                        <div className="detail-row">
+                          <span>Uploaded At</span>
+                          <strong>
+                            {item.uploaded_at
+                              ? new Date(item.uploaded_at).toLocaleString()
+                              : "N/A"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <button
+                        className="login-button"
+                        onClick={() => previewEvidence(item)}
+                        disabled={evidencePreviewLoading}
+                      >
+                        {evidencePreviewLoading
+                          ? "Opening..."
+                          : item.content_type?.startsWith("video/")
+                          ? "▶️ View Video"
+                          : "🖼️ View Image"}
+                      </button>
+                    </div>
+                  ))
+                )}
+
+                {evidencePreviewError && (
+                  <div className="error-box">
+                    ❌ {evidencePreviewError}
+                  </div>
+                )}
+
+                {evidencePreview && (
+                  <div
+                    className="result-card"
+                    style={{ marginTop: "18px" }}
+                  >
+                    <div className="inspection-header">
+                      <div>
+                        <h3>{evidencePreview.type}</h3>
+                        <p className="card-description">
+                          {evidencePreview.fileName}
+                        </p>
+                      </div>
+
+                      <button
+                        className="secondary-button"
+                        onClick={closeEvidencePreview}
+                      >
+                        ✕ Close Preview
+                      </button>
+                    </div>
+
+                    {evidencePreview.contentType?.startsWith("video/") ? (
+                      <video
+                        controls
+                        playsInline
+                        src={evidencePreview.url}
+                        style={{
+                          width: "100%",
+                          maxHeight: "520px",
+                          borderRadius: "12px",
+                          marginTop: "12px",
+                          background: "#000",
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={evidencePreview.url}
+                        alt={evidencePreview.fileName}
+                        style={{
+                          width: "100%",
+                          maxHeight: "620px",
+                          objectFit: "contain",
+                          borderRadius: "12px",
+                          marginTop: "12px",
+                          background: "#f8fafc",
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section className="verify-card">
+                <h2>📜 Certificate</h2>
+
+                {certificate ? (
+                  <>
+                    <div className="details">
+
+                      <div className="detail-row">
+                        <span>Certificate Number</span>
+                        <strong>{certificate.certificate_number}</strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Certificate ID</span>
+                        <strong>{certificate.id}</strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Issued At</span>
+                        <strong>
+                          {certificate.issued_at
+                            ? new Date(certificate.issued_at).toLocaleString()
+                            : "N/A"}
+                        </strong>
+                      </div>
+
+                      <div className="detail-row">
+                        <span>Valid Until</span>
+                        <strong>
+                          {certificate.valid_until
+                            ? new Date(certificate.valid_until).toLocaleDateString()
+                            : "N/A"}
+                        </strong>
+                      </div>
+
+                    </div>
+
+                    <div className="security-message">
+                      🛡️ Certificate record is linked to
+                      this verification case.
+                    </div>
+
+                    <button
+                      className="login-button"
+                      onClick={() =>
+                        downloadCertificate(
+                          certificate.certificate_number
+                        )
+                      }
+                    >
+                      📥 Download Certificate PDF
+                    </button>
+
+                    <button
+                      className="secondary-button"
+                      onClick={() =>
+                        window.open(
+                          `/verify/${encodeURIComponent(
+                            certificate.certificate_number
+                          )}`,
+                          "_blank"
+                        )
+                      }
+                    >
+                      🔍 Verify Certificate
+                    </button>
+
+                  </>
+                ) : (
+                  <div className="loading-box">
+                    📜 No certificate has been generated
+                    for this case.
+                  </div>
+                )}
+              </section>
+            </>
+          )}
         </main>
 
         <footer>
@@ -2705,6 +3886,170 @@ if (isPublicVerifyPage) {
                 />
               </div>
 
+              {/* LIVE PHYSICAL LOCATION */}
+              <LiveLocationMap
+                onLocationChange={handleLocationChange}
+              />
+
+              {/* PHYSICAL VERIFICATION EVIDENCE */}
+              <div
+                style={{
+                  marginTop: "24px",
+                  padding: "20px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "14px",
+                  background: "#ffffff",
+                }}
+              >
+                <h3 style={{ marginTop: 0 }}>
+                  📷 Physical Verification Evidence
+                </h3>
+
+                <p
+                  style={{
+                    color: "#6b7280",
+                    fontSize: "14px",
+                    marginBottom: "20px",
+                  }}
+                >
+                  Upload physical evidence captured during
+                  the inspection. Machine photo and reading
+                  photo are required.
+                </p>
+
+                <div style={{ marginBottom: "18px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    📷 Machine Photo *
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) =>
+                      setMachinePhoto(
+                        e.target.files?.[0] || null
+                      )
+                    }
+                  />
+
+                  {machinePhoto && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        fontSize: "13px",
+                        color: "#166534",
+                      }}
+                    >
+                      ✓ {machinePhoto.name}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: "18px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    📷 Machine Reading Photo *
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) =>
+                      setReadingPhoto(
+                        e.target.files?.[0] || null
+                      )
+                    }
+                  />
+
+                  {readingPhoto && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        fontSize: "13px",
+                        color: "#166534",
+                      }}
+                    >
+                      ✓ {readingPhoto.name}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontWeight: "600",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    🎥 Inspection Video (Optional)
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime"
+                    onChange={(e) =>
+                      setInspectionVideo(
+                        e.target.files?.[0] || null
+                      )
+                    }
+                  />
+
+                  {inspectionVideo && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        fontSize: "13px",
+                        color: "#166534",
+                      }}
+                    >
+                      ✓ {inspectionVideo.name}
+                    </div>
+                  )}
+                </div>
+
+                {evidenceLoading && (
+                  <div
+                    style={{
+                      marginTop: "15px",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      background: "#eff6ff",
+                      color: "#1d4ed8",
+                      fontSize: "14px",
+                    }}
+                  >
+                    ⏳ Uploading physical evidence...
+                  </div>
+                )}
+
+                {evidenceError && (
+                  <div
+                    style={{
+                      marginTop: "15px",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      background: "#fef2f2",
+                      color: "#b91c1c",
+                      fontSize: "14px",
+                    }}
+                  >
+                    ⚠️ {evidenceError}
+                  </div>
+                )}
+              </div>
+
               {inspectionError && (
                 <div className="error-box">
                   ❌ {inspectionError}
@@ -2954,11 +4299,14 @@ if (isPublicVerifyPage) {
                     submitInspection
                   }
                   disabled={
-                    inspectionLoading
+                    inspectionLoading ||
+                    evidenceLoading
                   }
                 >
                   {inspectionLoading
                     ? "Submitting Inspection..."
+                    : evidenceLoading
+                    ? "Uploading Evidence..."
                     : "✅ Submit Inspection"}
                 </button>
               )}

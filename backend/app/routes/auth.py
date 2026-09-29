@@ -40,7 +40,7 @@ def register(
         )
 
     # Validate role
-    if user_data.role not in ["SHOPKEEPER", "INSPECTOR"]:
+    if user_data.role not in ["SHOPKEEPER", "INSPECTOR", "OFFICER"]:
         raise HTTPException(
             status_code=400,
             detail="Invalid role"

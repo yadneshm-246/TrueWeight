@@ -17,7 +17,6 @@ class Inspection(Base):
 
     standard_weight = Column(Float, nullable=False)
     machine_reading = Column(Float, nullable=False)
-
     calculated_error = Column(Float, nullable=False)
     permissible_error = Column(Float, nullable=False)
 
@@ -30,6 +29,30 @@ class Inspection(Base):
     )
 
     remarks = Column(String(500), nullable=True)
+
+    # ==========================================
+    # 📍 INSPECTION GEOLOCATION
+    # ==========================================
+
+    latitude = Column(Float, nullable=True)
+
+    longitude = Column(Float, nullable=True)
+
+    altitude = Column(Float, nullable=True)
+
+    location_accuracy = Column(
+        Float,
+        nullable=True
+    )
+
+    location_timestamp = Column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+
+    # ==========================================
+    # INSPECTION TIME
+    # ==========================================
 
     inspected_at = Column(
         DateTime(timezone=True),
